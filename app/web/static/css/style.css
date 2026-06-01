@@ -1,0 +1,60 @@
+body {
+    background-color: #f5f6fa;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.navbar {
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.card {
+    border: none;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    border-radius: 10px;
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: #fff;
+    border-bottom: 1px solid #eee;
+    font-weight: 600;
+}
+
+.card-text.display-6 {
+    font-size: 2rem;
+    font-weight: 700;
+}
+
+.table th {
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.pagination {
+    margin-top: 1rem;
+}
+
+.toast {
+    min-width: 250px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-group-sm .btn {
+    padding: 0.15rem 0.4rem;
+    font-size: 0.75rem;
+}
+
+.text-truncate {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+#toast-container .toast {
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}

@@ -1,0 +1,550 @@
+{% extends "base.html" %}
+{% block title %}仪表盘 - B站舆情监控平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>📊 舆情仪表盘</h1>
+    <div class="d-flex align-items-center gap-2">
+        <div class="dropdown" id="keyword-multi-select-dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" type="button" id="keywordDropdownBtn" data-bs-toggle="dropdown" aria-expanded="false">
+                <i class="bi bi-funnel"></i> <span id="keyword-filter-label">全部关键词</span>
+            </button>
+            <div class="dropdown-menu p-2" style="min-width: 200px; max-height: 300px; overflow-y: auto;" id="keyword-checkbox-container">
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" value="" id="check-all-keywords" checked onchange="toggleAllKeywords()">
+                    <label class="form-check-label" for="check-all-keywords"><strong>全部关键词</strong></label>
+                </div>
+                <div id="keyword-checkboxes"></div>
+                <div class="dropdown-divider"></div>
+                <button class="btn btn-primary btn-sm w-100" onclick="applyKeywordFilter()">应用筛选</button>
+            </div>
+        </div>
+        <button class="btn btn-success btn-sm" onclick="triggerGlobalCrawl()"><i class="bi bi-cloud-download"></i> 触发全量采集</button>
+        <button class="btn btn-info btn-sm" onclick="triggerGlobalAnalysis()"><i class="bi bi-graph-up"></i> 触发全量分析</button>
+    </div>
+</div>
+
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+<div class="row mb-4" id="stats-row">
+    <div class="col-md-3">
+        <div class="card text-bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">视频总数</h5>
+                <p class="card-text display-6" id="stat-videos">--</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-success">
+            <div class="card-body">
+                <h5 class="card-title">评论总量</h5>
+                <p class="card-text display-6" id="stat-comments">--</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-info">
+            <div class="card-body">
+                <h5 class="card-title">监控关键词</h5>
+                <p class="card-text display-6" id="stat-keywords">--</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">数据质量评分</h5>
+                <p class="card-text display-6" id="stat-quality">--</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">📈 情感趋势（近30天）</div>
+            <div class="card-body">
+                <div id="chart-sentiment" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">🥧 情感占比</div>
+            <div class="card-body">
+                <div id="chart-sentiment-pie" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">☁️ 关键词词云</div>
+            <div class="card-body">
+                <div id="chart-wordcloud" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">🎯 话题聚类散点图</div>
+            <div class="card-body">
+                <div id="chart-cluster" style="height: 350px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>🔑 监控关键词管理</span>
+                <button class="btn btn-primary btn-sm" onclick="showAddKeywordModal()"><i class="bi bi-plus"></i> 添加</button>
+            </div>
+            <div class="card-body" id="keywords-container" style="max-height:400px;overflow-y:auto;">
+                <p class="text-muted">加载中...</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>🎬 最近采集视频</span>
+                <a href="/videos" class="btn btn-outline-primary btn-sm">查看全部</a>
+            </div>
+            <div class="card-body" id="recent-videos-container" style="max-height:400px;overflow-y:auto;">
+                <p class="text-muted">加载中...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="keywordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="keywordModalTitle">添加关键词</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">关键词</label>
+                    <input type="text" class="form-control" id="new-keyword" placeholder="输入监控关键词...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">分区筛选（可选）</label>
+                    <input type="text" class="form-control" id="new-partition" placeholder="如：科技、生活...">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">采集间隔（秒）</label>
+                    <input type="number" class="form-control" id="new-interval" value="60" min="10">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addKeyword()">确认添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var API_BASE = '/api/v1';
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(el);
+    var toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+}
+
+async function fetchJSON(url, opts) {
+    var resp = await fetch(API_BASE + url, opts || {});
+    if (!resp.ok) {
+        var err = await resp.text();
+        throw new Error(err || ('HTTP ' + resp.status));
+    }
+    return await resp.json();
+}
+
+async function apiPost(url) {
+    return await fetchJSON(url, { method: 'POST' });
+}
+
+function setPlaceholder(chart, msg) {
+    chart.clear();
+    chart.setOption({
+        title: { text: msg, left: 'center', top: 'center', textStyle: { color: '#999', fontSize: 14 } },
+        xAxis: { show: false }, yAxis: { show: false }, series: []
+    });
+}
+
+var selectedKeywordIds = [];
+var allKeywords = [];
+
+document.addEventListener('DOMContentLoaded', async function () {
+    var sentimentChart = echarts.init(document.getElementById('chart-sentiment'));
+    var pieChart = echarts.init(document.getElementById('chart-sentiment-pie'));
+    var wordcloudChart = echarts.init(document.getElementById('chart-wordcloud'));
+    var clusterChart = echarts.init(document.getElementById('chart-cluster'));
+
+    setPlaceholder(sentimentChart, '加载中...');
+    setPlaceholder(pieChart, '加载中...');
+    setPlaceholder(wordcloudChart, '加载中...');
+    setPlaceholder(clusterChart, '加载中...');
+
+    await loadKeywordOptions();
+    loadStats();
+    loadSentiment(sentimentChart, pieChart);
+    loadKeywords(wordcloudChart);
+    loadTopicCluster(clusterChart);
+    loadKeywordsList();
+    loadRecentVideos();
+});
+
+async function loadKeywordOptions() {
+    try {
+        var data = await fetchJSON('/monitor/keywords?page=1&page_size=100');
+        allKeywords = data.items || [];
+        var container = document.getElementById('keyword-checkboxes');
+        if (container && allKeywords.length > 0) {
+            var html = '';
+            allKeywords.forEach(function(k) {
+                html += '<div class="form-check">';
+                html += '<input class="form-check-input keyword-check" type="checkbox" value="' + k.id + '" id="kw-check-' + k.id + '" onchange="onKeywordCheckChange()">';
+                html += '<label class="form-check-label" for="kw-check-' + k.id + '">' + k.keyword + '</label>';
+                html += '</div>';
+            });
+            container.innerHTML = html;
+        }
+    } catch(e) {}
+}
+
+function toggleAllKeywords() {
+    var allCheck = document.getElementById('check-all-keywords');
+    var checks = document.querySelectorAll('.keyword-check');
+    checks.forEach(function(c) {
+        c.checked = allCheck.checked;
+    });
+}
+
+function onKeywordCheckChange() {
+    var checks = document.querySelectorAll('.keyword-check');
+    var allChecked = true;
+    checks.forEach(function(c) {
+        if (!c.checked) allChecked = false;
+    });
+    document.getElementById('check-all-keywords').checked = allChecked;
+}
+
+function applyKeywordFilter() {
+    var allCheck = document.getElementById('check-all-keywords');
+    if (allCheck.checked) {
+        selectedKeywordIds = [];
+        document.getElementById('keyword-filter-label').textContent = '全部关键词';
+    } else {
+        selectedKeywordIds = [];
+        var checks = document.querySelectorAll('.keyword-check');
+        checks.forEach(function(c) {
+            if (c.checked) selectedKeywordIds.push(c.value);
+        });
+        if (selectedKeywordIds.length === 0) {
+            showToast('请至少选择一个关键词', 'warning');
+            return;
+        }
+        var label = selectedKeywordIds.length + '个关键词';
+        if (selectedKeywordIds.length <= 3) {
+            var names = [];
+            selectedKeywordIds.forEach(function(id) {
+                var kw = allKeywords.find(function(k) { return String(k.id) === id; });
+                if (kw) names.push(kw.keyword);
+            });
+            label = names.join('、');
+        }
+        document.getElementById('keyword-filter-label').textContent = label;
+    }
+
+    var dropdown = bootstrap.Dropdown.getInstance(document.getElementById('keywordDropdownBtn'));
+    if (dropdown) dropdown.hide();
+
+    var sentimentChart = echarts.getInstanceByDom(document.getElementById('chart-sentiment'));
+    var pieChart = echarts.getInstanceByDom(document.getElementById('chart-sentiment-pie'));
+    var wordcloudChart = echarts.getInstanceByDom(document.getElementById('chart-wordcloud'));
+    var clusterChart = echarts.getInstanceByDom(document.getElementById('chart-cluster'));
+    loadSentiment(sentimentChart, pieChart);
+    loadKeywords(wordcloudChart);
+    loadTopicCluster(clusterChart);
+    loadStats();
+}
+
+function buildKeywordParam() {
+    if (selectedKeywordIds.length === 0) return '';
+    return '?keyword_ids=' + selectedKeywordIds.join(',');
+}
+
+async function loadStats() {
+    try {
+        var v = await fetchJSON('/videos/?page=1&page_size=1' + (selectedKeywordIds.length > 0 ? buildKeywordParam().replace('?', '&') : ''));
+        document.getElementById('stat-videos').textContent = v.total || 0;
+    } catch(e) { document.getElementById('stat-videos').textContent = '--'; }
+    try {
+        var c = await fetchJSON('/comments/?page=1&page_size=1' + (selectedKeywordIds.length > 0 ? buildKeywordParam().replace('?', '&') : ''));
+        document.getElementById('stat-comments').textContent = c.total || 0;
+    } catch(e) { document.getElementById('stat-comments').textContent = '--'; }
+    try { var k = await fetchJSON('/monitor/keywords?page=1&page_size=1'); document.getElementById('stat-keywords').textContent = k.total || 0; } catch(e) { document.getElementById('stat-keywords').textContent = '--'; }
+    try { var q = await fetchJSON('/governance/quality-report'); document.getElementById('stat-quality').textContent = (q.overall_score || 0).toFixed(1); } catch(e) { document.getElementById('stat-quality').textContent = '--'; }
+}
+
+async function loadSentiment(sentimentChart, pieChart) {
+    try {
+        var url = '/analysis/sentiment' + buildKeywordParam();
+        var data = await fetchJSON(url);
+        if (data.status === 'no_data') {
+            setPlaceholder(sentimentChart, '暂无数据');
+            setPlaceholder(pieChart, '暂无数据');
+            return;
+        }
+        var trend = data.trend_data || [];
+        var datesMap = {};
+        trend.forEach(function(t) {
+            var d = t.time || '';
+            if (!datesMap[d]) datesMap[d] = { positive: 0, neutral: 0, negative: 0, count: 0 };
+            datesMap[d][t.label || 'neutral']++;
+            datesMap[d].count++;
+        });
+        var sortedDates = Object.keys(datesMap).sort().slice(-30);
+        var posData = [], neuData = [], negData = [];
+        sortedDates.forEach(function(d) {
+            var total = datesMap[d].count || 1;
+            posData.push(Math.round(datesMap[d].positive / total * 100));
+            neuData.push(Math.round(datesMap[d].neutral / total * 100));
+            negData.push(Math.round(datesMap[d].negative / total * 100));
+        });
+        sentimentChart.setOption({
+            title: { show: false },
+            tooltip: { trigger: 'axis' },
+            legend: { data: ['正面', '中性', '负面'] },
+            xAxis: { type: 'category', data: sortedDates, axisLabel: { rotate: 45 } },
+            yAxis: { type: 'value', name: '占比(%)' },
+            series: [
+                { name: '正面', type: 'line', data: posData, smooth: true, itemStyle: { color: '#52c41a' } },
+                { name: '中性', type: 'line', data: neuData, smooth: true, itemStyle: { color: '#1890ff' } },
+                { name: '负面', type: 'line', data: negData, smooth: true, itemStyle: { color: '#ff4d4f' } }
+            ]
+        });
+        pieChart.setOption({
+            title: { show: false },
+            series: [{
+                type: 'pie', radius: ['40%', '70%'],
+                label: { formatter: '{b}: {d}%' },
+                data: [
+                    { value: Math.round((data.positive_ratio || 0) * 100), name: '正面', itemStyle: { color: '#52c41a' } },
+                    { value: Math.round((data.neutral_ratio || 0) * 100), name: '中性', itemStyle: { color: '#1890ff' } },
+                    { value: Math.round((data.negative_ratio || 0) * 100), name: '负面', itemStyle: { color: '#ff4d4f' } }
+                ]
+            }]
+        });
+    } catch(e) {
+        setPlaceholder(sentimentChart, '暂无数据');
+        setPlaceholder(pieChart, '暂无数据');
+    }
+}
+
+async function loadKeywords(wordcloudChart) {
+    try {
+        var url = '/analysis/keywords' + buildKeywordParam();
+        var data = await fetchJSON(url);
+        if (data.status === 'no_data') { setPlaceholder(wordcloudChart, '暂无数据'); return; }
+        var words = (data.keywords || []).slice(0, 60);
+        if (words.length === 0) { setPlaceholder(wordcloudChart, '暂无数据'); return; }
+        wordcloudChart.setOption({
+            title: { show: false },
+            tooltip: {},
+            series: [{
+                type: 'wordCloud', shape: 'circle', sizeRange: [14, 50],
+                rotationRange: [-30, 30], gridSize: 8, drawOutOfBound: false,
+                textStyle: { fontFamily: 'sans-serif', fontWeight: 'bold',
+                    color: function() { var colors = ['#1890ff','#52c41a','#faad14','#f5222d','#722ed1','#13c2c2','#eb2f96']; return colors[Math.floor(Math.random() * colors.length)]; }
+                },
+                data: words.map(function(w) { return { name: w.word, value: w.count }; })
+            }]
+        });
+    } catch(e) { setPlaceholder(wordcloudChart, '暂无数据'); }
+}
+
+async function loadTopicCluster(clusterChart) {
+    try {
+        var url = '/analysis/topic-cluster' + buildKeywordParam();
+        var data = await fetchJSON(url);
+        if (data.status === 'no_data' || data.insufficient_data) { setPlaceholder(clusterChart, '数据不足，需要更多评论'); return; }
+        var scatterData = data.scatter_data || [];
+        if (scatterData.length === 0) { setPlaceholder(clusterChart, '暂无聚类数据'); return; }
+        var topics = data.topics || [];
+        var topicNames = {};
+        var colors = ['#1890ff','#52c41a','#faad14','#f5222d','#722ed1','#13c2c2','#eb2f96','#fa8c16','#a0d911','#2f54eb'];
+        topics.forEach(function(t, i) {
+            topicNames[t.topic_id] = '话题' + (t.topic_id + 1) + '(' + (t.keywords||[]).slice(0,2).join('/') + ')';
+        });
+        var series = {};
+        scatterData.forEach(function(d) {
+            var tid = d.topic;
+            if (!series[tid]) {
+                series[tid] = { name: topicNames[tid] || ('话题' + (tid+1)), type: 'scatter', data: [], itemStyle: { color: colors[tid % colors.length] } };
+            }
+            series[tid].data.push([d.x, d.y, d.text]);
+        });
+        clusterChart.setOption({
+            title: { show: false },
+            tooltip: { formatter: function(p) { return p.value ? p.value[2] : ''; } },
+            legend: { data: Object.values(series).map(function(s) { return s.name; }), type: 'scroll', bottom: 0 },
+            xAxis: { type: 'value', name: 'PC1', splitLine: { show: false } },
+            yAxis: { type: 'value', name: 'PC2', splitLine: { show: false } },
+            series: Object.values(series)
+        });
+    } catch(e) { setPlaceholder(clusterChart, '暂无聚类数据'); }
+}
+
+async function loadKeywordsList() {
+    try {
+        var data = await fetchJSON('/monitor/keywords?page=1&page_size=100');
+        var html = '';
+        if (data.items.length === 0) {
+            html = '<p class="text-muted text-center py-3">暂无监控关键词，请添加</p>';
+        } else {
+            data.items.forEach(function(k) {
+                html += '<div class="d-flex justify-content-between align-items-center p-2 border-bottom">';
+                html += '<div><strong>' + k.keyword + '</strong> <small class="text-muted">间隔:' + k.crawl_interval + 's</small> ' + (k.is_active ? '<span class="badge bg-success">启用</span>' : '<span class="badge bg-secondary">停用</span>') + '</div>';
+                html += '<div class="btn-group btn-group-sm">';
+                html += '<button class="btn btn-outline-primary" onclick="triggerKeywordCrawl(' + k.id + ')" title="触发采集"><i class="bi bi-cloud-download"></i></button>';
+                html += '<button class="btn btn-outline-info" onclick="triggerKeywordAnalysis(' + k.id + ')" title="运行分析"><i class="bi bi-graph-up"></i></button>';
+                html += '<button class="btn btn-outline-danger" onclick="deleteKeyword(' + k.id + ')" title="删除"><i class="bi bi-trash"></i></button>';
+                html += '</div></div>';
+            });
+        }
+        document.getElementById('keywords-container').innerHTML = html;
+    } catch(e) {
+        document.getElementById('keywords-container').innerHTML = '<p class="text-danger">加载失败: ' + e.message + '</p>';
+    }
+}
+
+async function loadRecentVideos() {
+    try {
+        var data = await fetchJSON('/videos/?page=1&page_size=10');
+        var html = '';
+        if (data.items.length === 0) {
+            html = '<p class="text-muted text-center py-3">暂无视频数据</p>';
+        } else {
+            data.items.forEach(function(v) {
+                html += '<div class="d-flex justify-content-between align-items-center p-2 border-bottom">';
+                html += '<div style="flex:1;min-width:0;"><a href="/videos/' + v.bvid + '" class="text-truncate d-block" style="max-width:300px;">' + (v.title || '').substring(0, 45) + '</a><small class="text-muted">' + (v.pub_time||'').substring(0,10) + ' · 评论' + v.comment_count + '</small></div>';
+                html += '<span class="badge bg-secondary">' + (v.partition_tag || '--') + '</span>';
+                html += '</div>';
+            });
+        }
+        document.getElementById('recent-videos-container').innerHTML = html;
+    } catch(e) {
+        document.getElementById('recent-videos-container').innerHTML = '<p class="text-danger">加载失败</p>';
+    }
+}
+
+async function triggerKeywordCrawl(keywordId) {
+    try {
+        var result = await apiPost('/monitor/keywords/' + keywordId + '/trigger');
+        showToast('采集任务已提交: ' + result.keyword, 'success');
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerKeywordAnalysis(keywordId) {
+    try {
+        showToast('正在为该关键词运行分析...', 'info');
+        var result = await apiPost('/monitor/keywords/' + keywordId + '/trigger-analysis');
+        showToast('分析任务已提交: ' + result.keyword, 'success');
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+
+async function deleteKeyword(keywordId) {
+    if (!confirm('确定删除该关键词吗？')) return;
+    try {
+        await fetch(API_BASE + '/monitor/keywords/' + keywordId, { method: 'DELETE' });
+        showToast('关键词已删除', 'success');
+        loadKeywordsList();
+        loadStats();
+    } catch(e) {
+        showToast('删除失败: ' + e.message, 'danger');
+    }
+}
+
+function showAddKeywordModal() {
+    document.getElementById('keywordModalTitle').textContent = '添加关键词';
+    document.getElementById('new-keyword').value = '';
+    document.getElementById('new-partition').value = '';
+    document.getElementById('new-interval').value = '60';
+    var modal = new bootstrap.Modal(document.getElementById('keywordModal'));
+    modal.show();
+}
+
+async function addKeyword() {
+    var keyword = document.getElementById('new-keyword').value.trim();
+    var partition = document.getElementById('new-partition').value.trim();
+    var interval = document.getElementById('new-interval').value;
+    if (!keyword) { showToast('请输入关键词', 'warning'); return; }
+    try {
+        await fetchJSON('/monitor/keywords', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                keyword: keyword,
+                partition_filter: partition || null,
+                crawl_interval: parseInt(interval) || 60,
+                is_active: true
+            })
+        });
+        bootstrap.Modal.getInstance(document.getElementById('keywordModal')).hide();
+        showToast('关键词添加成功', 'success');
+        loadKeywordsList();
+        loadStats();
+        loadKeywordOptions();
+    } catch(e) {
+        showToast('添加失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerGlobalCrawl() {
+    showToast('正在为所有关键词触发采集...', 'info');
+    try {
+        var keywords = await fetchJSON('/monitor/keywords?page=1&page_size=100');
+        var count = 0;
+        for (var i = 0; i < keywords.items.length; i++) {
+            try { await apiPost('/monitor/keywords/' + keywords.items[i].id + '/trigger'); count++; } catch(e) {}
+        }
+        showToast('已触发 ' + count + ' 个关键词的采集任务', 'success');
+    } catch(e) {
+        showToast('操作失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerGlobalAnalysis() {
+    try {
+        var result = await apiPost('/monitor/keywords/1/trigger-analysis');
+        showToast('全量分析任务已提交', 'success');
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+</script>
+{% endblock %}

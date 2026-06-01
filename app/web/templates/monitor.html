@@ -1,0 +1,382 @@
+{% extends "base.html" %}
+{% block title %}监控配置 - B站舆情监控平台{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>🔧 监控配置中心</h1>
+    <button class="btn btn-primary" onclick="showAddKeywordModal()">
+        <i class="bi bi-plus-lg"></i> 添加监控关键词
+    </button>
+</div>
+
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-list-check"></i> 关键词列表</span>
+                <small class="text-muted" id="keyword-summary">加载中...</small>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>关键词</th>
+                                <th>分区</th>
+                                <th>排序</th>
+                                <th>间隔</th>
+                                <th>状态</th>
+                                <th>上次采集</th>
+                                <th>视频/评论</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="keywords-table-body">
+                            <tr><td colspan="7" class="text-center text-muted py-4">加载中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-bar-chart-line"></i> 数据概览
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-3">
+                        <div class="display-6 text-primary" id="overview-keywords">--</div>
+                        <small class="text-muted">关键词总数</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="display-6 text-success" id="overview-active">--</div>
+                        <small class="text-muted">活跃监控</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="display-6 text-info" id="overview-videos">--</div>
+                        <small class="text-muted">采集视频</small>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="display-6 text-warning" id="overview-comments">--</div>
+                        <small class="text-muted">采集评论</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-lightning-charge"></i> 快捷操作</span>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-success" onclick="triggerAutoCrawl()">
+                        <i class="bi bi-cloud-download"></i> 触发全量采集
+                    </button>
+                    <button class="btn btn-info" onclick="triggerAutoAnalysis()">
+                        <i class="bi bi-graph-up"></i> 触发全量分析
+                    </button>
+                </div>
+                <hr>
+                <div class="small text-muted">
+                    <p class="mb-1"><i class="bi bi-clock"></i> 自动采集间隔：5 分钟</p>
+                    <p class="mb-1"><i class="bi bi-clock"></i> 自动分析间隔：30 分钟</p>
+                    <p class="mb-0"><i class="bi bi-info-circle"></i> 仅对<b>启用</b>状态的关键词执行自动采集</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-clock-history"></i> 最近采集动态
+            </div>
+            <div class="card-body p-0" style="max-height:400px;overflow-y:auto;">
+                <div id="activities-list" class="list-group list-group-flush">
+                    <div class="list-group-item text-muted text-center py-3">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="keywordModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="keywordModalTitle">添加关键词</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">关键词 <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="new-keyword" placeholder="如：Python教程">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">分区筛选（可选）</label>
+                    <input type="text" class="form-control" id="new-partition" placeholder="如：科技、生活">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">排序方式</label>
+                    <select class="form-select" id="new-sort">
+                        <option value="totalrank">综合排序</option>
+                        <option value="click">播放量排序</option>
+                        <option value="pubdate">最新发布</option>
+                    </select>
+                    <div class="form-text">选择搜索结果排序方式</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">采集间隔（秒）</label>
+                    <input type="number" class="form-control" id="new-interval" value="300" min="60">
+                    <div class="form-text">最小 60 秒，建议 300 秒（5分钟）以上</div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="addKeyword()">确认添加</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var API_BASE = '/api/v1';
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(el);
+    var toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+}
+
+async function fetchJSON(url, opts) {
+    var resp = await fetch(API_BASE + url, opts || {});
+    if (!resp.ok) {
+        var err = await resp.text();
+        throw new Error(err || ('HTTP ' + resp.status));
+    }
+    return await resp.json();
+}
+
+async function apiPost(url) {
+    return await fetchJSON(url, { method: 'POST' });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadMonitorStatus();
+    loadActivities();
+});
+
+async function loadMonitorStatus() {
+    try {
+        var data = await fetchJSON('/monitor/status');
+        var keywords = data.keywords || [];
+        var summary = data.summary || {};
+
+        document.getElementById('overview-keywords').textContent = summary.total_keywords || 0;
+        document.getElementById('overview-active').textContent = summary.active_count || 0;
+        document.getElementById('overview-videos').textContent = summary.total_videos || 0;
+        document.getElementById('overview-comments').textContent = summary.total_comments || 0;
+        document.getElementById('keyword-summary').textContent = '共 ' + (summary.total_keywords || 0) + ' 个关键词，' + (summary.active_count || 0) + ' 个活跃';
+
+        var tbody = document.getElementById('keywords-table-body');
+        if (keywords.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-4">暂无监控关键词，请点击右上角添加</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = '';
+        keywords.forEach(function(k) {
+            var lastCrawled = k.last_crawled_at ? new Date(k.last_crawled_at).toLocaleString('zh-CN') : '<span class="text-muted">从未</span>';
+            var statusBadge = k.is_active
+                ? '<span class="badge bg-success">启用</span>'
+                : '<span class="badge bg-secondary">停用</span>';
+            var toggleBtn = k.is_active
+                ? '<button class="btn btn-outline-secondary btn-sm" onclick="toggleKeyword(' + k.id + ', false)" title="停用"><i class="bi bi-pause-fill"></i></button>'
+                : '<button class="btn btn-outline-success btn-sm" onclick="toggleKeyword(' + k.id + ', true)" title="启用"><i class="bi bi-play-fill"></i></button>';
+            var sortLabel = {totalrank: '综合', click: '播放量', pubdate: '最新'}[k.sort_order] || k.sort_order;
+
+            var row = document.createElement('tr');
+            row.innerHTML =
+                '<td><strong>' + k.keyword + '</strong></td>' +
+                '<td>' + (k.partition_filter || '--') + '</td>' +
+                '<td><span class="badge bg-light text-dark">' + sortLabel + '</span></td>' +
+                '<td>' + k.crawl_interval + 's</td>' +
+                '<td>' + statusBadge + '</td>' +
+                '<td class="small">' + lastCrawled + '</td>' +
+                '<td>' + (k.total_videos || 0) + ' / ' + (k.total_comments || 0) + '</td>' +
+                '<td>' +
+                    '<div class="btn-group btn-group-sm">' +
+                        '<button class="btn btn-outline-primary" onclick="triggerKeywordCrawl(' + k.id + ')" title="立即采集"><i class="bi bi-cloud-download"></i></button>' +
+                        '<button class="btn btn-outline-info" onclick="triggerKeywordAnalysis(' + k.id + ')" title="运行分析"><i class="bi bi-graph-up"></i></button>' +
+                        toggleBtn +
+                        '<button class="btn btn-outline-danger" onclick="deleteKeyword(' + k.id + ')" title="删除"><i class="bi bi-trash"></i></button>' +
+                    '</div>' +
+                '</td>';
+            tbody.appendChild(row);
+        });
+    } catch(e) {
+        document.getElementById('keywords-table-body').innerHTML = '<tr><td colspan="7" class="text-center text-danger py-4">加载失败: ' + e.message + '</td></tr>';
+    }
+}
+
+async function loadActivities() {
+    try {
+        var data = await fetchJSON('/monitor/activities?limit=20');
+        var activities = data.activities || [];
+        var container = document.getElementById('activities-list');
+
+        if (activities.length === 0) {
+            container.innerHTML = '<div class="list-group-item text-muted text-center py-3">暂无采集记录</div>';
+            return;
+        }
+
+        container.innerHTML = '';
+        activities.forEach(function(a) {
+            var timeStr = a.time ? new Date(a.time).toLocaleString('zh-CN') : '';
+            var item = document.createElement('div');
+            item.className = 'list-group-item';
+            item.innerHTML =
+                '<div class="d-flex w-100 justify-content-between">' +
+                    '<small class="text-muted">' + timeStr + '</small>' +
+                    '<span class="badge bg-primary">' + a.keyword + '</span>' +
+                '</div>' +
+                '<p class="mb-0 small">采集视频 <b>' + a.title + '</b></p>' +
+                '<small class="text-muted">视频+' + a.videos_added + ' · 评论+' + a.comments_added + '</small>';
+            container.appendChild(item);
+        });
+    } catch(e) {
+        document.getElementById('activities-list').innerHTML = '<div class="list-group-item text-danger text-center py-3">加载失败</div>';
+    }
+}
+
+function showAddKeywordModal() {
+    document.getElementById('keywordModalTitle').textContent = '添加监控关键词';
+    document.getElementById('new-keyword').value = '';
+    document.getElementById('new-partition').value = '';
+    document.getElementById('new-interval').value = '300';
+    var modal = new bootstrap.Modal(document.getElementById('keywordModal'));
+    modal.show();
+}
+
+async function addKeyword() {
+    var keyword = document.getElementById('new-keyword').value.trim();
+    var partition = document.getElementById('new-partition').value.trim();
+    var sortOrder = document.getElementById('new-sort').value;
+    var interval = document.getElementById('new-interval').value;
+    if (!keyword) { showToast('请输入关键词', 'warning'); return; }
+    try {
+        await fetchJSON('/monitor/keywords', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                keyword: keyword,
+                partition_filter: partition || null,
+                sort_order: sortOrder,
+                crawl_interval: parseInt(interval) || 300,
+                is_active: true
+            })
+        });
+        bootstrap.Modal.getInstance(document.getElementById('keywordModal')).hide();
+        showToast('关键词添加成功', 'success');
+        loadMonitorStatus();
+        loadActivities();
+    } catch(e) {
+        showToast('添加失败: ' + e.message, 'danger');
+    }
+}
+
+async function toggleKeyword(keywordId, activate) {
+    try {
+        await fetchJSON('/monitor/keywords/' + keywordId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: activate })
+        });
+        showToast(activate ? '关键词已启用' : '关键词已停用', 'success');
+        loadMonitorStatus();
+    } catch(e) {
+        showToast('操作失败: ' + e.message, 'danger');
+    }
+}
+
+async function deleteKeyword(keywordId) {
+    if (!confirm('确定删除该关键词吗？相关视频数据不会被删除。')) return;
+    try {
+        var resp = await fetch(API_BASE + '/monitor/keywords/' + keywordId, { method: 'DELETE' });
+        if (!resp.ok) {
+            var err = await resp.text();
+            throw new Error(err || ('HTTP ' + resp.status));
+        }
+        showToast('关键词已删除', 'success');
+        loadMonitorStatus();
+    } catch(e) {
+        showToast('删除失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerKeywordCrawl(keywordId) {
+    try {
+        var result = await apiPost('/monitor/keywords/' + keywordId + '/trigger');
+        showToast('采集任务已提交: ' + result.keyword, 'success');
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerKeywordAnalysis(keywordId) {
+    try {
+        var result = await apiPost('/monitor/keywords/' + keywordId + '/trigger-analysis');
+        showToast('分析任务已提交: ' + result.keyword + ' (任务ID: ' + result.task_id + ')', 'success');
+    } catch(e) {
+        showToast('分析触发失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerAutoCrawl() {
+    showToast('正在为所有活跃关键词触发采集...', 'info');
+    try {
+        var data = await fetchJSON('/monitor/status');
+        var keywords = data.keywords || [];
+        var count = 0;
+        for (var i = 0; i < keywords.length; i++) {
+            if (keywords[i].is_active) {
+                try { await apiPost('/monitor/keywords/' + keywords[i].id + '/trigger'); count++; } catch(e) {}
+            }
+        }
+        showToast('已触发 ' + count + ' 个关键词的采集任务', 'success');
+    } catch(e) {
+        showToast('操作失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerAutoAnalysis() {
+    showToast('正在触发全量分析...', 'info');
+    try {
+        var data = await fetchJSON('/monitor/status');
+        var keywords = data.keywords || [];
+        if (keywords.length > 0) {
+            await apiPost('/monitor/keywords/' + keywords[0].id + '/trigger-analysis');
+            showToast('全量分析任务已提交', 'success');
+        } else {
+            showToast('没有可分析的关键词', 'warning');
+        }
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+</script>
+{% endblock %}

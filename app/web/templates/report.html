@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+{% block title %}报告导出 - B站舆情监控平台{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>📥 报告导出</h1>
+    <div>
+        <button class="btn btn-info btn-sm" onclick="triggerGlobalAnalysis()"><i class="bi bi-graph-up"></i> 运行全量分析</button>
+        <button class="btn btn-success btn-sm ms-1" onclick="triggerGovernance()"><i class="bi bi-shield-check"></i> 运行治理</button>
+    </div>
+</div>
+
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+<div class="row">
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">📄 评论数据导出</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">按视频筛选（可选）</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="export-video-bvid" placeholder="输入BV号，留空导出全部">
+                        <button class="btn btn-outline-secondary" onclick="loadVideoPreview()">预览</button>
+                    </div>
+                    <div id="video-preview" class="mt-2"></div>
+                </div>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="exportCSV()">
+                        <i class="bi bi-download"></i> 导出CSV
+                    </button>
+                    <button class="btn btn-success" onclick="exportJSON()">
+                        <i class="bi bi-file-earmark-text"></i> 导出JSON报告
+                    </button>
+                    <button class="btn btn-outline-secondary" onclick="exportSummary()">
+                        <i class="bi bi-file-spreadsheet"></i> 导出摘要
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="card">
+            <div class="card-header">📊 分析状态总览</div>
+            <div class="card-body">
+                <div id="analysis-status">
+                    <div class="spinner-border spinner-border-sm" role="status"></div> 加载中...
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">📈 最近分析记录</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead><tr><th>分析类型</th><th>关联数据</th><th>分析时间</th></tr></thead>
+                        <tbody id="analysis-records"><tr><td colspan="3" class="text-center text-muted">加载中...</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var API_BASE = '/api/v1';
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(el);
+    var toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+}
+
+async function fetchJSON(url, opts) {
+    var resp = await fetch(API_BASE + url, opts || {});
+    if (!resp.ok) {
+        var err = await resp.text();
+        throw new Error(err || ('HTTP ' + resp.status));
+    }
+    return await resp.json();
+}
+
+async function apiPost(url) {
+    return await fetchJSON(url, { method: 'POST' });
+}
+
+function getBvid() {
+    return document.getElementById('export-video-bvid').value.trim();
+}
+
+async function loadVideoPreview() {
+    var bvid = getBvid();
+    if (!bvid) { document.getElementById('video-preview').innerHTML = ''; return; }
+    try {
+        var video = await fetchJSON('/videos/' + bvid);
+        document.getElementById('video-preview').innerHTML = '<div class="alert alert-success py-1 mb-0"><strong>' + video.title + '</strong> · 评论' + video.comment_count + ' · 弹幕' + video.danmaku_count + '</div>';
+    } catch(e) {
+        document.getElementById('video-preview').innerHTML = '<div class="alert alert-danger py-1 mb-0">未找到该视频</div>';
+    }
+}
+
+function exportCSV() {
+    var bvid = getBvid();
+    var url = API_BASE + '/export/report/csv';
+    if (bvid) url += '?video_bvid=' + encodeURIComponent(bvid);
+    showToast('正在导出CSV...', 'info');
+    window.open(url, '_blank');
+}
+
+function exportJSON() {
+    var bvid = getBvid();
+    var url = API_BASE + '/export/report/json';
+    if (bvid) url += '?video_bvid=' + encodeURIComponent(bvid);
+    showToast('正在导出JSON报告...', 'info');
+    window.open(url, '_blank');
+}
+
+function exportSummary() {
+    var bvid = getBvid();
+    var url = API_BASE + '/export/report/excel-summary';
+    if (bvid) url += '?video_bvid=' + encodeURIComponent(bvid);
+    showToast('正在导出摘要...', 'info');
+    window.open(url, '_blank');
+}
+
+async function loadStatus() {
+    var dims = ['sentiment', 'keywords', 'trend', 'user_profile', 'topic_cluster', 'network', 'danmaku_density'];
+    var names = { 'sentiment': '情感分析', 'keywords': '关键词提取', 'trend': '趋势分析', 'user_profile': '用户画像', 'topic_cluster': '话题聚类', 'network': '互动网络', 'danmaku_density': '弹幕密度' };
+    var completed = 0;
+    var html = '';
+    for (var i = 0; i < dims.length; i++) {
+        try {
+            var data = await fetchJSON('/analysis/' + dims[i]);
+            var ok = data.status !== 'no_data';
+            if (ok) completed++;
+            html += '<div class="d-flex justify-content-between mb-2"><span>' + (names[dims[i]] || dims[i]) + '</span><span class="badge ' + (ok ? 'bg-success' : 'bg-secondary') + '">' + (ok ? '已完成' : '未分析') + '</span></div>';
+        } catch(e) {
+            html += '<div class="d-flex justify-content-between mb-2"><span>' + (names[dims[i]] || dims[i]) + '</span><span class="badge bg-danger">查询失败</span></div>';
+        }
+    }
+    html = '<div class="mb-3"><strong>' + completed + '/' + dims.length + ' 维度已完成</strong></div>' + html;
+    document.getElementById('analysis-status').innerHTML = html;
+}
+
+async function loadRecords() {
+    try {
+        var records = [];
+        var dims = ['sentiment', 'keywords', 'trend', 'user_profile', 'topic_cluster', 'network', 'danmaku_density'];
+        var names = { 'sentiment': '情感分析', 'keywords': '关键词提取', 'trend': '趋势分析', 'user_profile': '用户画像', 'topic_cluster': '话题聚类', 'network': '互动网络', 'danmaku_density': '弹幕密度' };
+        for (var i = 0; i < dims.length; i++) {
+            try {
+                var data = await fetchJSON('/analysis/' + dims[i]);
+                if (data.status !== 'no_data' && data.analyzed_at) {
+                    records.push({ type: names[dims[i]] || dims[i], ref: '--', time: data.analyzed_at });
+                }
+            } catch(e) {}
+        }
+        var html = '';
+        if (records.length === 0) {
+            html = '<tr><td colspan="3" class="text-center text-muted">暂无分析记录，请先触发数据分析</td></tr>';
+        } else {
+            records.sort(function(a,b) { return (b.time||'').localeCompare(a.time||''); });
+            records.forEach(function(r) {
+                html += '<tr><td>' + r.type + '</td><td><code>' + r.ref + '</code></td><td>' + (r.time||'').substring(0,19) + '</td></tr>';
+            });
+        }
+        document.getElementById('analysis-records').innerHTML = html;
+    } catch(e) {
+        document.getElementById('analysis-records').innerHTML = '<tr><td colspan="3" class="text-center text-danger">加载失败</td></tr>';
+    }
+}
+
+async function triggerGlobalAnalysis() {
+    try {
+        await apiPost('/monitor/keywords/1/trigger-analysis');
+        showToast('全量分析任务已提交', 'success');
+        setTimeout(function() { loadStatus(); loadRecords(); }, 3000);
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerGovernance() {
+    try {
+        await apiPost('/governance/trigger');
+        showToast('治理流水线已触发', 'success');
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadStatus();
+    loadRecords();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}热点话题 - B站舆情监控平台{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="bi bi-fire text-danger"></i> B站实时热点话题</h2>
+        <div>
+            <small class="text-muted me-3" id="last-update-time">上次更新: --</small>
+            <button id="btnCrawl" class="btn btn-primary" onclick="triggerCrawl()">
+                <i class="bi bi-cloud-download"></i> 立即采集
+            </button>
+        </div>
+    </div>
+
+    <div id="alertBox"></div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card text-white bg-primary">
+                <div class="card-body">
+                    <h5 class="card-title">总话题数</h5>
+                    <p class="card-text display-6" id="totalTopics">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-success">
+                <div class="card-body">
+                    <h5 class="card-title">正面话题</h5>
+                    <p class="card-text display-6" id="positiveTopics">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-warning">
+                <div class="card-body">
+                    <h5 class="card-title">中性话题</h5>
+                    <p class="card-text display-6" id="neutralTopics">-</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card text-white bg-danger">
+                <div class="card-body">
+                    <h5 class="card-title">负面话题</h5>
+                    <p class="card-text display-6" id="negativeTopics">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-list-ol"></i> 热搜榜单
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>排名</th>
+                                    <th>话题</th>
+                                    <th>热度</th>
+                                    <th>情感倾向</th>
+                                    <th>相关视频</th>
+                                    <th>分析样本</th>
+                                    <th>采集时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="hotSearchTable">
+                                <tr><td colspan="7" class="text-center text-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="bi bi-pie-chart"></i> 情感分布
+                </div>
+                <div class="card-body">
+                    <div id="sentimentChart" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function setBtnLoading(btn, loading) {
+    if (loading) {
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 处理中...';
+        btn.disabled = true;
+    } else {
+        btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+        btn.disabled = false;
+    }
+}
+
+function showAlert(message, type) {
+    const box = document.getElementById('alertBox');
+    box.innerHTML = `<div class="alert alert-${type} alert-dismissible fade show" role="alert">${message}<button type="button" class="btn-close" data-bs-dismiss="alert"></button></div>`;
+    setTimeout(() => { box.innerHTML = ''; }, 5000);
+}
+
+function getSentimentBadge(summary) {
+    if (summary === '正面' || summary === '偏正面') return '<span class="badge bg-success">正面</span>';
+    if (summary === '负面' || summary === '偏负面') return '<span class="badge bg-danger">负面</span>';
+    return '<span class="badge bg-secondary">中性</span>';
+}
+
+function getRankBadge(rank) {
+    if (rank === 1) return '<span class="badge bg-danger">1</span>';
+    if (rank === 2) return '<span class="badge bg-warning text-dark">2</span>';
+    if (rank === 3) return '<span class="badge bg-info text-dark">3</span>';
+    return `<span class="badge bg-light text-dark">${rank}</span>`;
+}
+
+function formatDateTime(dtStr) {
+    if (!dtStr) return '--';
+    var d = new Date(dtStr);
+    if (isNaN(d.getTime())) return dtStr.slice(0, 16);
+    var now = new Date();
+    var diff = Math.floor((now - d) / 1000);
+    if (diff < 60) return '刚刚';
+    if (diff < 3600) return Math.floor(diff / 60) + '分钟前';
+    if (diff < 86400) return Math.floor(diff / 3600) + '小时前';
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+async function loadHotSearch() {
+    try {
+        const res = await fetch('/api/v1/hot-search/list');
+        const data = await res.json();
+
+        if (data.status !== 'ok' || !data.items || data.items.length === 0) {
+            document.getElementById('hotSearchTable').innerHTML =
+                '<tr><td colspan="7" class="text-center text-muted">暂无数据，请点击"立即采集"获取热点话题</td></tr>';
+            updateStats(0, 0, 0, 0);
+            document.getElementById('last-update-time').textContent = '上次更新: 无数据';
+            return;
+        }
+
+        const items = data.items;
+        let html = '';
+        let pos = 0, neu = 0, neg = 0;
+        var latestTime = null;
+
+        for (const item of items) {
+            if (item.sentiment_summary === '正面' || item.sentiment_summary === '偏正面') pos++;
+            else if (item.sentiment_summary === '负面' || item.sentiment_summary === '偏负面') neg++;
+            else neu++;
+
+            if (item.crawled_at) {
+                var t = new Date(item.crawled_at);
+                if (!latestTime || t > latestTime) latestTime = t;
+            }
+
+            html += `<tr>
+                <td>${getRankBadge(item.rank)}</td>
+                <td><strong>${escapeHtml(item.keyword)}</strong></td>
+                <td>${item.heat_score || '-'}</td>
+                <td>${getSentimentBadge(item.sentiment_summary)}</td>
+                <td>${item.video_count || 0}</td>
+                <td>${item.comment_count || 0}</td>
+                <td>${formatDateTime(item.crawled_at)}</td>
+            </tr>`;
+        }
+
+        document.getElementById('hotSearchTable').innerHTML = html;
+        updateStats(items.length, pos, neu, neg);
+        renderSentimentChart(items);
+        if (latestTime) {
+            document.getElementById('last-update-time').textContent = '上次更新: ' + formatDateTime(latestTime.toISOString());
+        }
+    } catch (e) {
+        document.getElementById('hotSearchTable').innerHTML =
+            '<tr><td colspan="7" class="text-center text-danger">加载失败</td></tr>';
+    }
+}
+
+function updateStats(total, pos, neu, neg) {
+    document.getElementById('totalTopics').textContent = total;
+    document.getElementById('positiveTopics').textContent = pos;
+    document.getElementById('neutralTopics').textContent = neu;
+    document.getElementById('negativeTopics').textContent = neg;
+}
+
+function renderSentimentChart(items) {
+    const chartDom = document.getElementById('sentimentChart');
+    if (!chartDom) return;
+    const chart = echarts.init(chartDom);
+
+    let pos = 0, neu = 0, neg = 0;
+    for (const item of items) {
+        const p = item.sentiment_positive || 0;
+        const n = item.sentiment_neutral || 0;
+        const negVal = item.sentiment_negative || 0;
+        if (p >= n && p >= negVal) pos++;
+        else if (negVal >= n) neg++;
+        else neu++;
+    }
+
+    chart.setOption({
+        tooltip: { trigger: 'item' },
+        legend: { bottom: '0%' },
+        series: [{
+            type: 'pie',
+            radius: ['40%', '70%'],
+            avoidLabelOverlap: false,
+            itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+            label: { show: true, formatter: '{b}: {c}' },
+            data: [
+                { value: pos, name: '正面', itemStyle: { color: '#28a745' } },
+                { value: neu, name: '中性', itemStyle: { color: '#ffc107' } },
+                { value: neg, name: '负面', itemStyle: { color: '#dc3545' } },
+            ]
+        }]
+    });
+}
+
+async function triggerCrawl() {
+    const btn = document.getElementById('btnCrawl');
+    setBtnLoading(btn, true);
+    showAlert('热点话题采集任务已触发，请稍后刷新查看结果', 'info');
+
+    try {
+        const res = await fetch('/api/v1/hot-search/crawl', { method: 'POST' });
+        const data = await res.json();
+        if (data.status === 'dispatched') {
+            showAlert('采集任务已分发，任务ID: ' + data.task_id, 'success');
+            setTimeout(loadHotSearch, 3000);
+        } else {
+            showAlert('触发失败', 'danger');
+        }
+    } catch (e) {
+        showAlert('请求失败: ' + e.message, 'danger');
+    } finally {
+        setBtnLoading(btn, false);
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+loadHotSearch();
+setInterval(loadHotSearch, 300000);
+</script>
+{% endblock %}

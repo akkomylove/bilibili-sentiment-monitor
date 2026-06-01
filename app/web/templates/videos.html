@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}视频列表 - B站舆情监控平台{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>🎬 视频列表</h1>
+    <div>
+        <button class="btn btn-outline-success btn-sm" onclick="triggerGlobalCrawl()"><i class="bi bi-cloud-download"></i> 触发全量采集</button>
+    </div>
+</div>
+
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+<div class="row mb-3 g-2">
+    <div class="col-md-3">
+        <input type="text" class="form-control" id="search-keyword" placeholder="按标题搜索..." onkeyup="if(event.key==='Enter')loadVideos(1)">
+    </div>
+    <div class="col-md-2">
+        <button class="btn btn-primary w-100" onclick="loadVideos(1)">搜索</button>
+    </div>
+    <div class="col-md-3">
+        <select class="form-select" id="sort-select" onchange="loadVideos(1)">
+            <option value="created_at|desc">默认排序（最新）</option>
+            <option value="play_count|desc">按播放量降序</option>
+            <option value="comment_count|desc">按评论数降序</option>
+        </select>
+    </div>
+    <div class="col-md-2 ms-auto">
+        <select class="form-select" id="page-size-select" onchange="loadVideos(1)">
+            <option value="20">每页20条</option>
+            <option value="50">每页50条</option>
+            <option value="100">每页100条</option>
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>BV号</th><th>标题</th><th>分区</th><th>播放量</th><th>评论数</th><th>弹幕数</th><th>发布时间</th><th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="video-table-body">
+                    <tr><td colspan="8" class="text-center text-muted py-4">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        <nav><ul class="pagination justify-content-center" id="video-pagination"></ul></nav>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var API_BASE = '/api/v1';
+var currentPage = 1;
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(el);
+    var toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+}
+
+function formatNum(n) {
+    if (n >= 10000) return (n / 10000).toFixed(1) + '万';
+    if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+    return n;
+}
+
+async function fetchJSON(url, opts) {
+    var resp = await fetch(API_BASE + url, opts || {});
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return await resp.json();
+}
+
+async function apiPost(url) {
+    return await fetchJSON(url, { method: 'POST' });
+}
+
+async function loadVideos(page) {
+    currentPage = page;
+    var keyword = document.getElementById('search-keyword').value;
+    var pageSize = document.getElementById('page-size-select').value;
+    var sortVal = document.getElementById('sort-select').value;
+    var sortParts = sortVal.split('|');
+    var sortBy = sortParts[0];
+    var sortOrder = sortParts[1];
+    var url = '/videos/?page=' + page + '&page_size=' + pageSize + '&sort_by=' + sortBy + '&sort_order=' + sortOrder;
+    if (keyword) url += '&keyword=' + encodeURIComponent(keyword);
+
+    try {
+        var resp = await fetch(API_BASE + url);
+        var data = await resp.json();
+        var html = '';
+        if (data.items.length === 0) {
+            html = '<tr><td colspan="8" class="text-center text-muted py-4">暂无数据，请先配置监控关键词并触发采集</td></tr>';
+        } else {
+            data.items.forEach(function(v) {
+                html += '<tr>';
+                html += '<td><code>' + v.bvid + '</code></td>';
+                html += '<td><a href="/videos/' + v.bvid + '">' + (v.title || '').substring(0, 60) + '</a> <a href="https://www.bilibili.com/video/' + v.bvid + '" target="_blank" class="text-decoration-none" title="在B站打开"><span style="color:#00a1d6;font-size:0.85em;">↗</span></a></td>';
+                html += '<td>' + (v.partition_tag || '--') + '</td>';
+                html += '<td>' + formatNum(v.play_count || 0) + '</td>';
+                html += '<td>' + formatNum(v.comment_count || 0) + '</td>';
+                html += '<td>' + formatNum(v.danmaku_count || 0) + '</td>';
+                html += '<td>' + (v.pub_time || '').substring(0, 10) + '</td>';
+                html += '<td><div class="btn-group btn-group-sm"><a href="/videos/' + v.bvid + '" class="btn btn-outline-primary">详情</a><button class="btn btn-outline-success" onclick="triggerCrawl(\'' + v.bvid + '\')" title="采集评论/弹幕"><i class="bi bi-cloud-download"></i></button></div></td>';
+                html += '</tr>';
+            });
+        }
+        document.getElementById('video-table-body').innerHTML = html;
+
+        var pag = '';
+        var totalPages = data.total_pages || 1;
+        if (totalPages > 1) {
+            for (var i = 1; i <= Math.min(totalPages, 10); i++) {
+                pag += '<li class="page-item ' + (i === currentPage ? 'active' : '') + '"><a class="page-link" href="javascript:loadVideos(' + i + ')">' + i + '</a></li>';
+            }
+            if (totalPages > 10) pag += '<li class="page-item disabled"><a class="page-link">...</a></li>';
+        }
+        document.getElementById('video-pagination').innerHTML = pag;
+    } catch(e) {
+        document.getElementById('video-table-body').innerHTML = '<tr><td colspan="8" class="text-center text-danger py-4">加载失败: ' + e.message + '</td></tr>';
+    }
+}
+
+async function triggerCrawl(bvid) {
+    try {
+        var r1 = await apiPost('/videos/' + bvid + '/trigger-comments');
+        showToast('评论采集任务已提交: ' + bvid, 'success');
+        try { await apiPost('/videos/' + bvid + '/trigger-danmaku'); } catch(e) {}
+    } catch(e) {
+        showToast('触发失败: ' + e.message, 'danger');
+    }
+}
+
+async function triggerGlobalCrawl() {
+    showToast('正在触发全量采集...', 'info');
+    try {
+        var keywords = await fetchJSON('/monitor/keywords?page=1&page_size=100');
+        var count = 0;
+        for (var i = 0; i < keywords.items.length; i++) {
+            try { await apiPost('/monitor/keywords/' + keywords.items[i].id + '/trigger'); count++; } catch(e) {}
+        }
+        showToast('已触发 ' + count + ' 个关键词的采集任务', 'success');
+    } catch(e) {
+        showToast('操作失败: ' + e.message, 'danger');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() { loadVideos(1); });
+</script>
+{% endblock %}

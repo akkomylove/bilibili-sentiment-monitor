@@ -1,0 +1,15 @@
+- [ ] requirements.txt 包含所有项目依赖且可正常安装
+- [ ] pyproject.toml 配置了 ruff 和 mypy
+- [ ] ruff check app/ 无严重风格问题
+- [ ] mypy app/ 核心模块无类型错误
+- [ ] tests/ 目录结构完整，conftest.py 配置正确
+- [ ] pytest 可正常运行且至少有一个测试通过
+- [ ] 爬虫服务测试覆盖 BilibiliAPI 数据解析
+- [ ] 爬虫服务测试覆盖 Protobuf 弹幕解析
+- [ ] 治理引擎测试覆盖去重、清洗、脱敏、质量评分
+- [ ] 分析服务测试覆盖情感分析、关键词提取、趋势分析
+- [ ] run_full_analysis 修复为正确的串行调用方式
+- [ ] Celery Beat 配置包含定时采集任务
+- [ ] Celery Beat 配置包含定时分析任务
+- [ ] 定时任务状态可在 API 查询
+- [ ] README.md 更新了测试、Beat、代码规范的运行说明

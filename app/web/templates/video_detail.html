@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}视频详情 - {{ bvid }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h1>🎬 视频详情 <small class="text-muted" id="detail-bvid">{{ bvid }}</small></h1>
+    <div>
+        <button class="btn btn-success btn-sm me-1" onclick="triggerCrawl()"><i class="bi bi-cloud-download"></i> 采集评论</button>
+        <button class="btn btn-outline-success btn-sm me-1" onclick="triggerDanmaku()"><i class="bi bi-chat-dots"></i> 采集弹幕(Protobuf)</button>
+        <button class="btn btn-info btn-sm" onclick="triggerAnalysis()"><i class="bi bi-graph-up"></i> 运行分析</button>
+    </div>
+</div>
+
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+<div id="video-info" class="row mb-4">
+    <div class="col-12"><div class="card"><div class="card-body"><p class="text-muted">加载中...</p></div></div></div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mb-4">
+        <div class="card"><div class="card-header">📈 情感分析</div><div class="card-body"><div id="chart-sentiment" style="height:300px;"></div></div></div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card"><div class="card-header">☁️ 关键词词云</div><div class="card-body"><div id="chart-wordcloud" style="height:300px;"></div></div></div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card"><div class="card-header">🎯 弹幕密度</div><div class="card-body"><div id="chart-danmaku" style="height:300px;"></div></div></div>
+    </div>
+    <div class="col-md-6 mb-4">
+        <div class="card"><div class="card-header">💬 最新评论</div><div class="card-body"><div id="comments-list" style="max-height:300px;overflow-y:auto;">加载中...</div></div></div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>🎤 弹幕列表</span>
+                <small class="text-muted" id="danmaku-count">加载中...</small>
+            </div>
+            <div class="card-body">
+                <div id="danmaku-list" style="max-height:400px;overflow-y:auto;">加载中...</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var API_BASE = '/api/v1';
+var bvid = document.getElementById('detail-bvid').textContent.trim();
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(el);
+    var toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+}
+
+async function fetchJSON(url, opts) {
+    var resp = await fetch(API_BASE + url, opts || {});
+    if (!resp.ok) {
+        var err = await resp.text();
+        throw new Error(err || ('HTTP ' + resp.status));
+    }
+    return await resp.json();
+}
+
+async function apiPost(url) {
+    return await fetchJSON(url, { method: 'POST' });
+}
+
+function setPlaceholder(chart, msg) {
+    chart.clear();
+    chart.setOption({
+        title: { text: msg, left: 'center', top: 'center', textStyle: { color: '#999', fontSize: 14 } },
+        xAxis: { show: false }, yAxis: { show: false }, series: []
+    });
+}
+
+function setBtnLoading(btn, loading) {
+    if (loading) {
+        btn.dataset.originalHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 处理中...';
+        btn.disabled = true;
+    } else {
+        btn.innerHTML = btn.dataset.originalHtml || btn.innerHTML;
+        btn.disabled = false;
+    }
+}
+
+async function triggerCrawl() {
+    var btn = document.querySelector('button[onclick="triggerCrawl()"]');
+    setBtnLoading(btn, true);
+    try {
+        await apiPost('/videos/' + bvid + '/trigger-comments');
+        showToast('✅ 评论采集任务已提交，请在Celery Worker终端查看进度', 'success');
+    } catch(e) {
+        showToast('❌ 触发失败: ' + e.message, 'danger');
+    } finally {
+        setBtnLoading(btn, false);
+    }
+}
+
+async function triggerDanmaku() {
+    var btn = document.querySelector('button[onclick="triggerDanmaku()"]');
+    setBtnLoading(btn, true);
+    try {
+        await apiPost('/videos/' + bvid + '/trigger-danmaku');
+        showToast('✅ 弹幕采集任务已提交，采集完成后刷新页面查看', 'success');
+    } catch(e) {
+        showToast('❌ 触发失败: ' + e.message, 'danger');
+    } finally {
+        setBtnLoading(btn, false);
+    }
+}
+
+async function triggerAnalysis() {
+    var btn = document.querySelector('button[onclick="triggerAnalysis()"]');
+    setBtnLoading(btn, true);
+    try {
+        await apiPost('/videos/' + bvid + '/trigger-analysis');
+        showToast('✅ 分析任务已提交，分析耗时约1-3分钟，完成后刷新页面查看结果', 'success');
+    } catch(e) {
+        showToast('❌ 触发失败: ' + e.message, 'danger');
+    } finally {
+        setBtnLoading(btn, false);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', async function () {
+    var sentChart = echarts.init(document.getElementById('chart-sentiment'));
+    var wcChart = echarts.init(document.getElementById('chart-wordcloud'));
+    var dmChart = echarts.init(document.getElementById('chart-danmaku'));
+
+    setPlaceholder(sentChart, '加载中...');
+    setPlaceholder(wcChart, '加载中...');
+    setPlaceholder(dmChart, '加载中...');
+
+    try {
+        var video = await fetchJSON('/videos/' + bvid);
+        document.getElementById('video-info').innerHTML =
+            '<div class="col-12"><div class="card"><div class="card-body"><h4>' + video.title + '</h4>' +
+            '<span class="badge bg-primary">播放: ' + (video.play_count||0).toLocaleString() + '</span> ' +
+            '<span class="badge bg-success">评论: ' + (video.comment_count||0).toLocaleString() + '</span> ' +
+            '<span class="badge bg-info">弹幕: ' + (video.danmaku_count||0).toLocaleString() + '</span> ' +
+            '<span class="badge bg-secondary">分区: ' + (video.partition_tag||'--') + '</span> ' +
+            '<span class="badge bg-light text-dark">发布: ' + (video.pub_time||'') + '</span></div></div></div>';
+    } catch(e) {
+        document.getElementById('video-info').innerHTML = '<div class="col-12"><div class="card"><div class="card-body text-danger">视频信息加载失败</div></div></div>';
+    }
+
+    try {
+        var sentData = await fetchJSON('/analysis/sentiment?video_bvid=' + bvid);
+        if (sentData.status === 'no_data') {
+            setPlaceholder(sentChart, '暂无分析，请点击"运行分析"');
+        } else {
+            sentChart.setOption({
+                title: { show: false },
+                series: [{
+                    type: 'pie', radius: ['40%', '70%'],
+                    data: [
+                        { value: Math.round((sentData.positive_ratio||0)*100), name: '正面', itemStyle: { color: '#52c41a' } },
+                        { value: Math.round((sentData.neutral_ratio||0)*100), name: '中性', itemStyle: { color: '#1890ff' } },
+                        { value: Math.round((sentData.negative_ratio||0)*100), name: '负面', itemStyle: { color: '#ff4d4f' } }
+                    ]
+                }]
+            });
+        }
+    } catch(e) { setPlaceholder(sentChart, '加载失败'); }
+
+    try {
+        var kwData = await fetchJSON('/analysis/keywords?video_bvid=' + bvid);
+        if (kwData.status === 'no_data' || !kwData.keywords) {
+            setPlaceholder(wcChart, '暂无数据');
+        } else {
+            var words = kwData.keywords.slice(0, 60);
+            wcChart.setOption({
+                title: { show: false },
+                series: [{
+                    type: 'wordCloud', shape: 'circle', sizeRange: [12, 40],
+                    rotationRange: [-20, 20], gridSize: 6,
+                    textStyle: { fontFamily: 'sans-serif', fontWeight: 'bold',
+                        color: function() { var cs=['#1890ff','#52c41a','#faad14','#f5222d','#722ed1','#13c2c2','#eb2f96']; return cs[Math.floor(Math.random()*cs.length)]; }
+                    },
+                    data: words.map(function(w) { return { name: w.word, value: w.count }; })
+                }]
+            });
+        }
+    } catch(e) { setPlaceholder(wcChart, '加载失败'); }
+
+    try {
+        var dmData = await fetchJSON('/analysis/danmaku-density?video_bvid=' + bvid);
+        if (dmData.status === 'no_data' || !dmData.density_curve) {
+            setPlaceholder(dmChart, '暂无弹幕数据');
+        } else {
+            var curve = dmData.density_curve;
+            var xData = curve.map(function(d) { return d.start.toFixed(0) + 's'; });
+            var yData = curve.map(function(d) { return d.count; });
+            dmChart.setOption({
+                title: { show: false },
+                tooltip: { trigger: 'axis' },
+                xAxis: { type: 'category', data: xData },
+                yAxis: { type: 'value', name: '弹幕数' },
+                series: [{ type: 'bar', data: yData, itemStyle: { color: '#1890ff' } }],
+                dataZoom: [{ type: 'inside' }, { type: 'slider' }]
+            });
+        }
+    } catch(e) { setPlaceholder(dmChart, '加载失败'); }
+
+    try {
+        var comments = await fetchJSON('/comments/?video_bvid=' + bvid + '&page=1&page_size=20');
+        var html = '';
+        if (comments.items && comments.items.length > 0) {
+            comments.items.forEach(function(c) {
+                html += '<div class="border-bottom pb-2 mb-2"><strong>' + c.user_mid.substring(0,8) + '***</strong> <small class="text-muted">' + (c.pub_time||'').substring(0,16) + '</small><br>' + (c.raw_content || c.content || '').substring(0,200) + '</div>';
+            });
+        } else {
+            html = '<p class="text-muted">暂无评论数据，请点击"采集评论"</p>';
+        }
+        document.getElementById('comments-list').innerHTML = html;
+    } catch(e) {
+        document.getElementById('comments-list').innerHTML = '<p class="text-danger">加载失败</p>';
+    }
+
+    try {
+        var dmList = await fetchJSON('/videos/' + bvid + '/danmaku?page=1&page_size=50');
+        document.getElementById('danmaku-count').textContent = '共 ' + dmList.total + ' 条';
+        var dmHtml = '';
+        if (dmList.items && dmList.items.length > 0) {
+            dmList.items.forEach(function(d) {
+                var timeStr = '';
+                if (d.timeline !== undefined) {
+                    var mins = Math.floor(d.timeline / 60);
+                    var secs = Math.floor(d.timeline % 60);
+                    timeStr = mins + ':' + (secs < 10 ? '0' : '') + secs;
+                }
+                dmHtml += '<div class="d-inline-block me-2 mb-2"><span class="badge bg-light text-dark border">' + timeStr + '</span> ' + (d.content || '') + '</div>';
+            });
+        } else {
+            dmHtml = '<p class="text-muted">暂无弹幕数据，请点击"采集弹幕"</p>';
+        }
+        document.getElementById('danmaku-list').innerHTML = dmHtml;
+    } catch(e) {
+        document.getElementById('danmaku-list').innerHTML = '<p class="text-danger">加载失败</p>';
+        document.getElementById('danmaku-count').textContent = '';
+    }
+});
+</script>
+{% endblock %}
