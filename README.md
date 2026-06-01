@@ -1,150 +1,146 @@
 # B站舆情监控与分析平台
 
-## 项目结构
-```
-app
-├── __init__.py
-├── api
-│   ├── __init__.py
-│   ├── analysis.py
-│   ├── comments.py
-│   ├── export.py
-│   ├── governance.py
-│   ├── monitor.py
-│   └── videos.py
-├── config.py
-├── database.py
-├── dependencies.py
-├── main.py
-├── models
-│   ├── __init__.py
-│   ├── analysis.py
-│   ├── base.py
-│   ├── comment.py
-│   ├── danmaku.py
-│   ├── governance.py
-│   ├── monitor.py
-│   └── video.py
-├── schemas
-│   ├── __init__.py
-│   ├── analysis.py
-│   ├── comment.py
-│   ├── common.py
-│   ├── governance.py
-│   ├── monitor.py
-│   └── video.py
-├── services
-│   ├── analysis
-│   │   ├── __init__.py
-│   │   ├── danmaku_density.py
-│   │   ├── image_ocr.py
-│   │   ├── keywords.py
-│   │   ├── network.py
-│   │   ├── sentiment.py
-│   │   ├── topic_cluster.py
-│   │   ├── trend.py
-│   │   └── user_profile.py
-│   ├── crawler
-│   │   ├── bilibili.py
-│   │   └── danmaku_proto.py
-│   └── governance
-│       ├── __init__.py
-│       └── engine.py
-├── tasks
-│   ├── __init__.py
-│   ├── analysis.py
-│   ├── crawl.py
-│   └── governance.py
-└── web
-    ├── __init__.py
-    ├── routes.py
-    ├── static
-    │   └── css
-    │       └── style.css
-    └── templates
-        ├── base.html
-        ├── dashboard.html
-        ├── governance.html
-        ├── report.html
-        ├── video_detail.html
-        └── videos.html
-scripts
-└── init_db.py
-tests
-├── conftest.py
-├── services
-│   ├── analysis
-│   │   ├── test_keywords.py
-│   │   ├── test_sentiment.py
-│   │   └── test_trend.py
-│   ├── crawler
-│   │   └── test_bilibili.py
-│   └── governance
-│       └── test_engine.py
+基于 FastAPI + Celery + MySQL + Redis 构建的 Bilibili 舆情数据采集与多维分析系统，支持关键词监控、情感分析、话题聚类、数据治理与血缘追踪。
 
-14 directories, 54 files
-```
+---
 
-## 环境依赖
-- Python 3.10+
-- MySQL 8.0+
-- Redis 6.0+
+## 技术栈
 
-## 安装依赖
-```bash
-pip install -r requirements.txt
-```
+| 层级 | 技术 |
+|------|------|
+| 后端框架 | FastAPI + SQLAlchemy + Pydantic |
+| 任务队列 | Celery + Redis |
+| 数据库 | MySQL 8.0 |
+| 前端渲染 | Jinja2 + Bootstrap 5 + ECharts |
+| 爬虫 | requests + Protobuf 弹幕解析 |
+| 文本分析 | SnowNLP + jieba + scikit-learn |
+| 容器化 | Docker Compose |
+
+---
+
+## 功能特性
+
+### 数据采集
+- 关键词视频搜索（支持综合/播放量/时间排序）
+- 评论深度采集（前100条热评 + 10%回复）
+- 弹幕全量采集（按视频时长智能分段）
+- B站热搜榜定时采集
+
+### 舆情分析（八维分析）
+- 情感分析（基于点赞数的加权情感评分）
+- 关键词提取（词频统计 + 停用词过滤）
+- 趋势分析（时序情感走势 + 峰值检测）
+- 话题聚类（K-Means + PCA 降维可视化）
+- 用户画像（评论者活跃度分布）
+- 互动网络（评论者关系图）
+- 弹幕密度（时间轴密度分布）
+
+### 数据治理
+- 格式校验（空值/长度/类型检查）
+- 去重处理（同一用户相同内容去重）
+- 数据清洗（HTML标签过滤）
+- 敏感脱敏（手机号/邮箱隐藏）
+- 质量评分（完整率/去重率/时效性）
+- 血缘追踪（数据流转链路可视化）
+
+### 监控配置
+- 关键词 CRUD 管理
+- 启用/停用切换
+- 单关键词采集/分析
+- 全量采集/分析
+- 自动定时采集（Celery Beat）
+
+---
 
 ## 快速启动
+
+### 环境要求
+- Python 3.10+
+- Docker Desktop
+
+### 一键启动（Windows）
 ```bash
-# 1. 复制环境变量模板
+start.bat
+```
+
+### 手动启动
+```bash
+# 1. 启动 MySQL + Redis
+docker compose up -d
+
+# 2. 安装依赖
+pip install -r requirements.txt
+
+# 3. 配置环境变量
 cp .env.example .env
+# 编辑 .env 填写 B站 Cookie 和 Wbi 密钥
 
-# 2. 编辑 .env 配置数据库和Redis
-vim .env
-
-# 3. 初始化数据库
+# 4. 初始化数据库
 python scripts/init_db.py
+python scripts/seed_data.py
 
-# 4. 启动后端服务
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-
-# 5. 启动Celery任务队列（另开终端）
-python -m celery -A app.tasks worker --loglevel=info --concurrency=2
-
-# 6. 启动Celery Beat定时调度（另开终端）
-python -m celery -A app.tasks beat --loglevel=info
+# 5. 启动服务（三个终端）
+uvicorn app.main:app --host 0.0.0.0 --port 8010
+celery -A app.tasks worker --loglevel=info --concurrency=1 -P solo
+celery -A app.tasks beat --loglevel=info
 ```
 
-## 代码规范检查
-```bash
-# 代码风格检查
-ruff check app/ tests/
+---
 
-# 代码风格自动修复
-ruff check app/ tests/ --fix
+## 项目结构
 
-# 类型检查
-mypy app/
+```
+app/
+├── api/           # RESTful API 路由
+├── models/        # SQLAlchemy 数据模型
+├── schemas/       # Pydantic 数据校验
+├── services/      # 业务逻辑层
+│   ├── analysis/  # 八维分析引擎
+│   ├── crawler/   # B站爬虫
+│   ├── governance/# 数据治理引擎
+│   └── report/    # 报告生成
+├── tasks/         # Celery 异步任务
+└── web/           # 前端模板与静态资源
+
+scripts/           # 数据库初始化
+tests/             # pytest 单元测试
+docs/              # 设计文档
 ```
 
-## 运行测试
+---
+
+## 定时任务
+
+| 任务 | 间隔 | 说明 |
+|------|------|------|
+| auto_crawl_keywords | 5分钟 | 自动采集启用状态的关键词 |
+| run_full_analysis | 30分钟 | 自动运行全量分析 |
+| crawl_hot_search | 60分钟 | 自动采集B站热搜榜 |
+
+---
+
+## 测试
+
 ```bash
 pytest tests/ -v
 ```
 
-## 访问地址
-- 前端仪表盘: http://localhost:8000/dashboard
-- API文档: http://localhost:8000/docs
-- 管理后台: http://localhost:8000/governance
+26 个单元测试覆盖分析引擎、爬虫、数据治理核心模块。
 
-## 核心功能
-- 视频/评论/弹幕数据采集（支持XML和Protobuf弹幕API）
-- 情感分析、关键词提取、话题聚类、弹幕密度分析
-- 数据治理流水线（去重、清洗、脱敏、格式校验）
-- 数据血缘追踪与质量报告
-- 报告导出（CSV/JSON/摘要）
-- Celery Beat 定时自动采集与分析
+---
+
+## 访问地址
+
+| 端点 | 地址 |
+|------|------|
+| 前端仪表盘 | http://localhost:8010/dashboard |
+| 监控配置 | http://localhost:8010/monitor |
+| 数据治理 | http://localhost:8010/governance |
+| 热点话题 | http://localhost:8010/hot-search |
+| API 文档 | http://localhost:8010/docs |
+
+---
 
 ## 许可证
+
 MIT
