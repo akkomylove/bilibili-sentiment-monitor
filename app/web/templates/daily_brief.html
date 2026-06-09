@@ -1,0 +1,395 @@
+{% extends "base.html" %}
+{% block title %}AI 投资舆情简报{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+    <div class="d-flex align-items-center gap-2">
+        <h1 class="mb-0">📈 AI 投资舆情简报</h1>
+        <span id="range-badge" class="badge bg-secondary">加载中</span>
+    </div>
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <div class="btn-group btn-group-sm" role="group" id="range-presets">
+            <button type="button" class="btn btn-outline-primary" data-range="today">今日</button>
+            <button type="button" class="btn btn-outline-primary" data-range="7d">7 天</button>
+            <button type="button" class="btn btn-outline-primary" data-range="30d">30 天</button>
+            <button type="button" class="btn btn-outline-primary" data-range="90d">90 天</button>
+            <button type="button" class="btn btn-outline-primary" data-range="all">全部</button>
+            <button type="button" class="btn btn-outline-primary" data-range="custom">自定义</button>
+        </div>
+        <div id="custom-range" class="d-flex align-items-center gap-1" style="display:none !important;">
+            <input type="date" id="start-date" class="form-control form-control-sm" style="width: 145px;">
+            <span class="text-muted">~</span>
+            <input type="date" id="end-date" class="form-control form-control-sm" style="width: 145px;">
+        </div>
+        <select id="brief-sector" class="form-select form-select-sm" style="width: 140px;">
+            <option value="">全部板块</option>
+            <option value="半导体">半导体</option>
+            <option value="光通信">光通信</option>
+            <option value="光芯片">光芯片</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="loadBrief()"><i class="bi bi-arrow-clockwise"></i> 刷新</button>
+        <a class="btn btn-outline-dark btn-sm" href="/report" target="_blank" title="PPT 翻页式 7 维度报告">
+            <i class="bi bi-file-earmark-richtext"></i> 报告
+        </a>
+    </div>
+</div>
+
+<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+
+<!-- 4 个核心指标 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-bg-primary">
+            <div class="card-body">
+                <h5 class="card-title">监控视频</h5>
+                <p class="card-text display-6" id="stat-videos">--</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-success">
+            <div class="card-body">
+                <h5 class="card-title">评论总量</h5>
+                <p class="card-text display-6" id="stat-comments">--</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-info">
+            <div class="card-body">
+                <h5 class="card-title">正面占比</h5>
+                <p class="card-text display-6" id="stat-positive">--</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-bg-warning">
+            <div class="card-body">
+                <h5 class="card-title">整体情绪</h5>
+                <p class="card-text display-6" id="stat-mood">--</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- AI 总结（多视角） -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">🤖 AI 投资舆情总结（多视角分析）</div>
+            <div class="card-body">
+                <p id="brief-headline" class="lead mb-3" style="font-size: 1.1rem;">加载中...</p>
+
+                <h6 class="text-muted mt-3 mb-2">📊 板块聚焦</h6>
+                <div id="sector-focus-list" class="mb-3">
+                    <span class="text-muted">暂无数据</span>
+                </div>
+
+                <h6 class="text-muted mt-3 mb-2">💡 关键观点（多视角）</h6>
+                <div id="key-insights-list" class="mb-2">
+                    <span class="text-muted">暂无数据</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 3 板块情感饼图（核心分析） -->
+<div class="row mb-4">
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">🥧 半导体 情感占比</div>
+            <div class="card-body">
+                <div id="chart-pie-semiconductor" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">🥧 光通信 情感占比</div>
+            <div class="card-body">
+                <div id="chart-pie-optical" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">🥧 光芯片 情感占比</div>
+            <div class="card-body">
+                <div id="chart-pie-chip" style="height: 300px;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 行业术语热度（仅 SECTOR_TERMS，过滤 doge/总结 等噪声） -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">🔥 行业术语热度（板块投资词典）</div>
+            <div class="card-body">
+                <div id="hot-terms-list">
+                    <span class="text-muted">暂无数据</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+var API_BASE = '/api/v1';
+
+function showToast(msg, type) {
+    type = type || 'info';
+    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
+    var container = document.getElementById('toast-container');
+    var el = document.createElement('div');
+    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
+    el.setAttribute('role', 'alert');
+    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
+    container.appendChild(el);
+    var toast = new bootstrap.Toast(el, { delay: 3000 });
+    toast.show();
+    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
+}
+
+async function fetchJSON(url, opts) {
+    var resp = await fetch(API_BASE + url, opts || {});
+    if (!resp.ok) {
+        var err = await resp.text();
+        throw new Error(err || ('HTTP ' + resp.status));
+    }
+    return await resp.json();
+}
+
+function setPlaceholder(chart, msg) {
+    chart.clear();
+    chart.setOption({
+        title: { text: msg, left: 'center', top: 'center', textStyle: { color: '#999', fontSize: 14 } },
+        xAxis: { show: false }, yAxis: { show: false }, series: []
+    });
+}
+
+function escapeHtml(s) {
+    if (!s) return '';
+    return String(s).replace(/[&<>"']/g, function(c) {
+        return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+}
+
+document.addEventListener('DOMContentLoaded', async function () {
+    var pieSem = echarts.init(document.getElementById('chart-pie-semiconductor'));
+    var pieOpt = echarts.init(document.getElementById('chart-pie-optical'));
+    var pieChip = echarts.init(document.getElementById('chart-pie-chip'));
+
+    [pieSem, pieOpt, pieChip].forEach(function(c) { setPlaceholder(c, '加载中...'); });
+
+    // 默认选中"今日"
+    setRangePreset('today');
+    await loadBrief();
+
+    document.getElementById('brief-sector').addEventListener('change', loadBrief);
+
+    // 快捷按钮组
+    document.querySelectorAll('#range-presets button[data-range]').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            setRangePreset(this.getAttribute('data-range'));
+            loadBrief();
+        });
+    });
+
+    // 自定义日期变化
+    document.getElementById('start-date').addEventListener('change', loadBrief);
+    document.getElementById('end-date').addEventListener('change', loadBrief);
+});
+
+function fmtDate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+}
+
+function setRangePreset(preset) {
+    // 标记激活
+    document.querySelectorAll('#range-presets button').forEach(function(b) {
+        b.classList.remove('active');
+    });
+    var active = document.querySelector('#range-presets button[data-range="' + preset + '"]');
+    if (active) active.classList.add('active');
+
+    var custom = document.getElementById('custom-range');
+    if (preset === 'custom') {
+        custom.style.display = 'flex';
+        return;
+    } else {
+        custom.style.display = 'none';
+    }
+
+    var today = new Date();
+    var start = new Date(today);
+    if (preset === 'today') {
+        // 保持 start == today
+    } else if (preset === '7d') start.setDate(today.getDate() - 6);
+    else if (preset === '30d') start.setDate(today.getDate() - 29);
+    else if (preset === '90d') start.setDate(today.getDate() - 89);
+    else if (preset === 'all') {
+        // 全部：不传 start_date/end_date，API 不过滤
+        window.__rangeParams = { start: null, end: null, preset: preset };
+        return;
+    }
+    window.__rangeParams = {
+        start: fmtDate(start),
+        end: fmtDate(today),
+        preset: preset,
+    };
+}
+
+async function loadBrief() {
+    try {
+        var sector = document.getElementById('brief-sector').value;
+        var rp = window.__rangeParams || {};
+        var url = '/analysis/daily-brief';
+        var qs = [];
+        if (rp.start) qs.push('start_date=' + encodeURIComponent(rp.start));
+        if (rp.end) qs.push('end_date=' + encodeURIComponent(rp.end));
+        if (sector) qs.push('sector=' + encodeURIComponent(sector));
+        if (qs.length) url += '?' + qs.join('&');
+
+        var data = await fetchJSON(url);
+
+        // 0) 范围 badge
+        var badge = document.getElementById('range-badge');
+        if (data.is_fallback) {
+            badge.className = 'badge bg-warning text-dark';
+            badge.textContent = '⚠ ' + (data.range_label || '回退');
+        } else if (data.start_date && data.end_date && data.start_date !== data.end_date) {
+            badge.className = 'badge bg-info';
+            badge.textContent = '📅 ' + data.range_label;
+        } else {
+            badge.className = 'badge bg-primary';
+            badge.textContent = '📅 ' + (data.range_label || '今日');
+        }
+
+        // 1) 4 个核心统计卡
+        document.getElementById('stat-videos').textContent = data.total_videos || 0;
+        document.getElementById('stat-comments').textContent = data.total_comments || 0;
+        document.getElementById('stat-positive').textContent = ((data.sentiment && data.sentiment.positive_ratio) || 0) + '%';
+        document.getElementById('stat-mood').textContent = (data.sentiment && data.sentiment.mood) || '--';
+
+        // 2) AI 总结
+        renderSummary(data.summary || {});
+
+        // 3) 3 板块情感饼图
+        var pies = {
+            '半导体': data.sector_pies && data.sector_pies['半导体'],
+            '光通信': data.sector_pies && data.sector_pies['光通信'],
+            '光芯片': data.sector_pies && data.sector_pies['光芯片']
+        };
+        renderPie('chart-pie-semiconductor', pies['半导体']);
+        renderPie('chart-pie-optical', pies['光通信']);
+        renderPie('chart-pie-chip', pies['光芯片']);
+
+        // 4) 行业术语热度
+        renderHotTerms((data.summary && data.summary.hot_terms) || []);
+
+    } catch(e) {
+        showToast('加载简报失败: ' + e.message, 'danger');
+    }
+}
+
+function moodBadgeClass(mood) {
+    if (mood === '偏正面' || mood === '略偏正面') return 'bg-success';
+    if (mood === '偏负面' || mood === '略偏负面') return 'bg-danger';
+    if (mood === '中性') return 'bg-secondary';
+    return 'bg-secondary';
+}
+
+function sideBadgeClass(side) {
+    if (side === '正方') return 'bg-success';
+    if (side === '反方') return 'bg-danger';
+    if (side && side.indexOf('聚焦') === 0) return 'bg-primary';
+    return 'bg-secondary';
+}
+
+function renderSummary(summary) {
+    document.getElementById('brief-headline').textContent = summary.headline || '暂无数据';
+
+    // 板块聚焦
+    var sfList = document.getElementById('sector-focus-list');
+    if (summary.sector_focus && summary.sector_focus.length > 0) {
+        var html = '<div class="row g-2">';
+        summary.sector_focus.forEach(function(sec) {
+            html += '<div class="col-md-4">';
+            html += '<div class="border rounded p-2 d-flex justify-content-between align-items-center">';
+            html += '<div>';
+            html += '<strong>' + escapeHtml(sec.name) + '</strong> ';
+            html += '<span class="text-muted small">提及 ' + sec.mention_count + ' 条（' + sec.share_pct + '%）</span>';
+            html += '</div>';
+            html += '<span class="badge ' + moodBadgeClass(sec.mood) + '">' + escapeHtml(sec.mood) + '</span>';
+            html += '</div></div>';
+        });
+        html += '</div>';
+        sfList.innerHTML = html;
+    } else {
+        sfList.innerHTML = '<span class="text-muted">暂无板块数据</span>';
+    }
+
+    // 关键观点
+    var kiList = document.getElementById('key-insights-list');
+    if (summary.key_insights && summary.key_insights.length > 0) {
+        var html = '<ul class="list-group list-group-flush">';
+        summary.key_insights.forEach(function(ins) {
+            html += '<li class="list-group-item d-flex justify-content-between align-items-start">';
+            html += '<div class="ms-2 me-auto"><span class="badge ' + sideBadgeClass(ins.side) + ' me-2">' + escapeHtml(ins.side) + '</span>' + escapeHtml(ins.text) + '</div>';
+            html += '<span class="badge bg-light text-dark border">👍 ' + ins.likes + '</span>';
+            html += '</li>';
+        });
+        html += '</ul>';
+        kiList.innerHTML = html;
+    } else {
+        kiList.innerHTML = '<span class="text-muted">暂无关键观点</span>';
+    }
+}
+
+function renderHotTerms(terms) {
+    var el = document.getElementById('hot-terms-list');
+    if (!terms || terms.length === 0) {
+        el.innerHTML = '<span class="text-muted">暂无数据</span>';
+        return;
+    }
+    // 用大字号 + 不同颜色显示（字号按权重比例）
+    var maxW = terms[0].weight || 1;
+    var html = '';
+    terms.forEach(function(t) {
+        var fs = 14 + Math.round((t.weight / maxW) * 18);  // 14-32px
+        var color = t.count >= 50 ? '#d4380d' : (t.count >= 20 ? '#fa8c16' : '#1d39c4');
+        html += '<span class="me-3 mb-2 d-inline-block" style="font-size:' + fs + 'px; color:' + color + ';">' + escapeHtml(t.word) + ' <sup class="text-muted" style="font-size:12px;">' + t.count + '</sup></span>';
+    });
+    el.innerHTML = html;
+}
+
+function renderPie(domId, sectorData) {
+    var chart = echarts.getInstanceByDom(document.getElementById(domId));
+    if (!chart) return;
+    if (!sectorData || sectorData.total === 0) { setPlaceholder(chart, '暂无数据'); return; }
+    chart.setOption({
+        title: { show: false },
+        tooltip: { trigger: 'item', formatter: '{b}: {d}%' },
+        legend: { bottom: 0 },
+        series: [{
+            type: 'pie', radius: ['40%', '70%'],
+            label: { formatter: '{b}: {d}%' },
+            data: [
+                { value: Math.round((sectorData.positive_ratio || 0)), name: '正面', itemStyle: { color: '#52c41a' } },
+                { value: Math.round((sectorData.neutral_ratio || 0)), name: '中性', itemStyle: { color: '#1890ff' } },
+                { value: Math.round((sectorData.negative_ratio || 0)), name: '负面', itemStyle: { color: '#ff4d4f' } }
+            ]
+        }]
+    });
+}
+</script>
+{% endblock %}

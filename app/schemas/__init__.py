@@ -1,17 +1,8 @@
-from app.schemas.analysis import (
-    KeywordsResponse,
-    SentimentResponse,
-    TrendResponse,
-)
+# v2 简化：仅保留通用分页/错误/Monitor/Video/Comment 的 schema
+# analysis 专用 schema 已在 endpoint 内联 dict 定义，不再单独 Pydantic 化
+
 from app.schemas.comment import CommentListResponse, CommentResponse
 from app.schemas.common import ErrorResponse, PaginatedResponse
-from app.schemas.governance import (
-    GovernanceRuleCreate,
-    GovernanceRuleResponse,
-    LineageResponse,
-    LogResponse,
-    QualityReportResponse,
-)
 from app.schemas.monitor import (
     MonitorKeywordCreate,
     MonitorKeywordResponse,
@@ -29,12 +20,4 @@ __all__ = [
     "VideoListResponse",
     "CommentResponse",
     "CommentListResponse",
-    "GovernanceRuleCreate",
-    "GovernanceRuleResponse",
-    "QualityReportResponse",
-    "LineageResponse",
-    "LogResponse",
-    "SentimentResponse",
-    "KeywordsResponse",
-    "TrendResponse",
 ]

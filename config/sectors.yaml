@@ -1,0 +1,64 @@
+# AI 投资领域配置（v2 重构版 - 噪声过滤版）
+# 用途：定义监控的 AI 投资板块、关键词、热度阈值、抓取参数
+# 加载方：app/tasks/crawl.py 的 load_sectors_config()
+#
+# 关键词选择原则（用户要求）：
+# 1. 避免含义过多的短词/缩写（DFB/ASML/800G/1.6T/EUV 等会返回游戏、饮食等无关视频）
+# 2. 优先使用"具有明确投资领域特色"的词（板块名 + 上市公司全称 + 长复合词）
+# 3. 关注度高度集中于一个圈子，评论质量高
+
+sectors:
+  - name: "半导体"
+    keywords:
+      - "半导体"
+      - "芯片制造"
+      - "晶圆厂"
+      - "中芯国际"
+      - "台积电"
+      - "国产光刻机"
+      - "长江存储"
+      - "北方华创"
+    hot_threshold:
+      min_play: 10000
+      min_comment: 50
+
+  - name: "光通信"
+    keywords:
+      - "光模块"
+      - "光通信"
+      - "中际旭创"
+      - "新易盛"
+      - "天孚通信"
+      - "剑桥科技"
+      - "数据中心光模块"
+      - "光迅科技"
+    hot_threshold:
+      min_play: 5000
+      min_comment: 30
+
+  - name: "光芯片"
+    keywords:
+      - "光芯片"
+      - "激光器芯片"
+      - "源杰科技"
+      - "长光华芯"
+      - "仕佳光子"
+      - "光库科技"
+      - "激光雷达芯片"
+      - "探测器芯片"
+    hot_threshold:
+      min_play: 5000
+      min_comment: 30
+
+# 全局抓取参数
+crawl:
+  max_videos_per_keyword: 20      # 每个关键词最多取前 20 个视频（用户指定）
+  max_pages: 3                    # 搜索结果翻页数
+  max_comments_per_video: 100     # 每个视频最多取前 100 条评论
+  reply_top_percent: 10           # 取高赞前 10% 的回复
+  max_total_per_video: 150        # 评论+回复合并上限
+  schedule: "0 9 * * *"           # 每天 9:00 抓取
+  sort_order: "totalrank"         # B 站搜索排序：综合排序
+
+# 已废弃/可选参数（保留向后兼容）
+# 注意：弹幕相关参数已删除（v2 不抓弹幕）

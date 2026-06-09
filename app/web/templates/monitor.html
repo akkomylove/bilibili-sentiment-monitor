@@ -76,7 +76,7 @@
             <div class="card-body">
                 <div class="d-grid gap-2">
                     <button class="btn btn-success" onclick="triggerAutoCrawl()">
-                        <i class="bi bi-cloud-download"></i> 触发全量采集
+                        <i class="bi bi-cloud-download"></i> 触发限速采集（≤20/词）
                     </button>
                     <button class="btn btn-info" onclick="triggerAutoAnalysis()">
                         <i class="bi bi-graph-up"></i> 触发全量分析
@@ -84,9 +84,9 @@
                 </div>
                 <hr>
                 <div class="small text-muted">
-                    <p class="mb-1"><i class="bi bi-clock"></i> 自动采集间隔：5 分钟</p>
-                    <p class="mb-1"><i class="bi bi-clock"></i> 自动分析间隔：30 分钟</p>
-                    <p class="mb-0"><i class="bi bi-info-circle"></i> 仅对<b>启用</b>状态的关键词执行自动采集</p>
+                    <p class="mb-1 text-warning"><i class="bi bi-exclamation-triangle"></i> 当前为<b>手动模式</b>（Celery beat 未启用，无自动跑批）</p>
+                    <p class="mb-1"><i class="bi bi-sliders"></i> 单关键词上限：20 视频 / 3 页（见 sectors.yaml crawl 节）</p>
+                    <p class="mb-1"><i class="bi bi-info-circle"></i> 仅对<b>启用</b>状态的关键词执行</p>
                 </div>
             </div>
         </div>
@@ -364,18 +364,26 @@ async function triggerAutoCrawl() {
 }
 
 async function triggerAutoAnalysis() {
-    showToast('正在触发全量分析...', 'info');
+    showToast('正在对所有活跃关键词触发分析...', 'info');
     try {
         var data = await fetchJSON('/monitor/status');
-        var keywords = data.keywords || [];
-        if (keywords.length > 0) {
-            await apiPost('/monitor/keywords/' + keywords[0].id + '/trigger-analysis');
-            showToast('全量分析任务已提交', 'success');
-        } else {
-            showToast('没有可分析的关键词', 'warning');
+        var keywords = (data.keywords || []).filter(function(k) { return k.is_active; });
+        if (keywords.length === 0) {
+            showToast('没有可分析的活跃关键词', 'warning');
+            return;
         }
+        var ok = 0, fail = 0;
+        for (var i = 0; i < keywords.length; i++) {
+            try {
+                await apiPost('/monitor/keywords/' + keywords[i].id + '/trigger-analysis');
+                ok++;
+            } catch(e) {
+                fail++;
+            }
+        }
+        showToast('已对 ' + ok + ' 个关键词触发分析（失败 ' + fail + '）', fail > 0 ? 'warning' : 'success');
     } catch(e) {
-        showToast('触发失败: ' + e.message, 'danger');
+        showToast('操作失败: ' + e.message, 'danger');
     }
 }
 </script>

@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     bilibili_wbi_img_url: str = ""
     bilibili_wbi_sub_url: str = ""
 
+    # v2 新增：sectors.yaml 路径（项目根/config/sectors.yaml）
+    sectors_config_path: str = "config/sectors.yaml"
+
     @property
     def mysql_url(self) -> str:
         return (

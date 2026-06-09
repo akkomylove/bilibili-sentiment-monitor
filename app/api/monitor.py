@@ -114,13 +114,30 @@ def trigger_crawl(
     keyword = db.query(MonitorKeyword).filter(MonitorKeyword.id == keyword_id).first()
     if not keyword:
         raise HTTPException(status_code=404, detail="关键词不存在")
-    from app.tasks.crawl import crawl_by_keyword
-    task = crawl_by_keyword.delay(keyword_id, keyword.keyword, sort_order=keyword.sort_order)
+    from app.tasks.crawl import crawl_by_keyword, load_sectors_config
+
+    # 读 sectors.yaml 的限速参数（与 auto_crawl_keywords 保持一致）
+    try:
+        cfg = load_sectors_config().get("crawl", {})
+    except Exception:
+        cfg = {}
+    max_pages = int(cfg.get("max_pages", 3))
+    max_videos_per_keyword = int(cfg.get("max_videos_per_keyword", 20))
+
+    task = crawl_by_keyword.delay(
+        keyword.id,
+        keyword.keyword,
+        max_pages=max_pages,
+        sort_order=keyword.sort_order or cfg.get("sort_order", "totalrank"),
+        max_videos_per_keyword=max_videos_per_keyword,
+    )
     return {
         "status": "queued",
         "keyword_id": keyword_id,
         "keyword": keyword.keyword,
         "task_id": task.id,
+        "max_pages": max_pages,
+        "max_videos_per_keyword": max_videos_per_keyword,
     }
 
 

@@ -1,212 +1,1403 @@
-{% extends "base.html" %}
-{% block title %}报告导出 - B站舆情监控平台{% endblock %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-    <h1>📥 报告导出</h1>
-    <div>
-        <button class="btn btn-info btn-sm" onclick="triggerGlobalAnalysis()"><i class="bi bi-graph-up"></i> 运行全量分析</button>
-        <button class="btn btn-success btn-sm ms-1" onclick="triggerGovernance()"><i class="bi bi-shield-check"></i> 运行治理</button>
-    </div>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>舆情周报</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,900;1,400;1,700&family=Noto+Serif+SC:wght@400;600;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ============================================================
+     浅色财经杂志风 · 设计系统
+     配色: 暖米白底 + 财经红 + 杂志金 + 深黑
+     字体: Playfair Display (serif 标题) + Noto Serif SC (中文标题) + IBM Plex Mono (数字)
+     排版: 大量留白 · 强衬线 · 编辑感版式 · 数字独立色彩
+     ============================================================ */
+  :root {
+    --paper: #f3ede0;          /* 暖米色主底 */
+    --paper-2: #ebe4d2;        /* 略深米色 */
+    --ink: #16110d;            /* 深黑主文字 */
+    --ink-2: #3a342c;          /* 次级文字 */
+    --ink-3: #7a6f5f;          /* 弱化文字 */
+    --rule: #c8bea8;           /* 分割线暖灰 */
+    --accent: #a82a2a;         /* 财经红 - 重点强调 */
+    --accent-2: #b89968;       /* 杂志金 - 装饰 */
+    --up: #1f7a4d;             /* 涨绿 */
+    --down: #b91c1c;           /* 跌红 */
+    --neutral: #4a4030;        /* 中性棕 */
+
+    --serif-en: 'Playfair Display', 'Times New Roman', serif;
+    --serif-cn: 'Noto Serif SC', 'STSong', 'SimSun', serif;
+    --mono: 'IBM Plex Mono', 'Menlo', 'Consolas', monospace;
+    --sans-cn: 'Noto Sans SC', -apple-system, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans-cn);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 纸张纹理：点状噪声 + 极淡水平线 */
+  body {
+    background-image:
+      radial-gradient(circle at 1px 1px, rgba(22, 17, 13, 0.025) 1px, transparent 0),
+      repeating-linear-gradient(0deg, transparent, transparent 39px, rgba(22, 17, 13, 0.012) 40px);
+    background-size: 4px 4px, 100% 40px;
+  }
+
+  /* === PPT 翻页滚动 === */
+  .deck {
+    scroll-snap-type: y proximity;
+    overflow-y: scroll;
+    height: 100vh;
+    scroll-behavior: smooth;
+  }
+
+  .slide {
+    scroll-snap-align: start;
+    min-height: 100vh;
+    width: 100%;
+    padding: 64px 80px;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  /* 顶部 masthead - 报纸头样式 */
+  .masthead {
+    position: absolute;
+    top: 32px;
+    left: 80px;
+    right: 80px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--ink);
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-2);
+  }
+  .masthead .brand { color: var(--accent); font-weight: 600; }
+  .masthead .date { font-style: italic; }
+
+  /* 底部页码 - 杂志索引式 */
+  .page-num {
+    position: absolute;
+    bottom: 32px;
+    right: 80px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    letter-spacing: 0.1em;
+  }
+  .page-num .num { color: var(--accent); font-weight: 600; font-size: 14px; }
+
+  /* === Page 1: 封面 === */
+  .cover {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(180deg, var(--paper) 0%, var(--paper-2) 100%);
+  }
+  .cover .masthead { position: static; margin-bottom: 80px; width: 100%; }
+  .cover .edition {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+  .cover h1 {
+    font-family: var(--serif-cn);
+    font-size: 96px;
+    font-weight: 900;
+    line-height: 1.0;
+    color: var(--ink);
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+  }
+  .cover h1 .accent { color: var(--accent); font-style: italic; }
+  .cover .subtitle {
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 22px;
+    color: var(--ink-2);
+    max-width: 700px;
+    margin: 0 auto 60px;
+    line-height: 1.5;
+  }
+  .cover .mood-stamp {
+    display: inline-block;
+    padding: 8px 24px;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: var(--serif-en);
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    margin-top: 16px;
+  }
+  .cover .meta-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 40px;
+    margin-top: 60px;
+    max-width: 700px;
+    border-top: 1px solid var(--rule);
+    padding-top: 32px;
+  }
+  .cover .meta-cell { text-align: center; }
+  .cover .meta-cell .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+  }
+  .cover .meta-cell .val {
+    font-family: var(--serif-en);
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+
+  /* === 通用 slide 内部版式 === */
+  .slide-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-top: 80px;
+  }
+  .section-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    margin-bottom: 16px;
+  }
+  .slide-title {
+    font-family: var(--serif-cn);
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1.1;
+    color: var(--ink);
+    margin-bottom: 12px;
+    letter-spacing: -0.01em;
+  }
+  .slide-title .en {
+    display: block;
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 28px;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+  }
+  .slide-deck {
+    font-family: var(--serif-en);
+    font-size: 20px;
+    font-style: italic;
+    color: var(--ink-2);
+    margin-bottom: 40px;
+    max-width: 800px;
+  }
+  .rule-double {
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    height: 4px;
+    margin: 0 0 40px 0;
+  }
+
+  /* === Page 2: 核心态势 === */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0;
+    border: 1px solid var(--ink);
+    margin-bottom: 48px;
+  }
+  .kpi-cell {
+    padding: 32px 28px;
+    border-right: 1px solid var(--rule);
+    position: relative;
+  }
+  .kpi-cell:last-child { border-right: none; }
+  .kpi-cell .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-3);
+    margin-bottom: 16px;
+  }
+  .kpi-cell .num {
+    font-family: var(--serif-en);
+    font-size: 56px;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink);
+    margin-bottom: 8px;
+  }
+  .kpi-cell .num .unit {
+    font-size: 18px;
+    color: var(--ink-3);
+    font-weight: 400;
+    margin-left: 4px;
+  }
+  .kpi-cell .delta {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-2);
+  }
+  .kpi-cell .delta.up { color: var(--up); }
+  .kpi-cell .delta.down { color: var(--down); }
+
+  .sentiment-donut {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 60px;
+    align-items: center;
+  }
+  .donut-wrap {
+    text-align: center;
+  }
+  .donut-wrap svg { transform: rotate(-90deg); }
+  .donut-center {
+    font-family: var(--serif-en);
+    font-size: 14px;
+    fill: var(--ink-2);
+  }
+  .donut-center-big {
+    font-size: 48px;
+    font-weight: 700;
+    fill: var(--ink);
+  }
+  .sentiment-detail .row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 16px 0;
+    border-bottom: 1px dashed var(--rule);
+  }
+  .sentiment-detail .row .name {
+    font-family: var(--serif-cn);
+    font-size: 18px;
+    font-weight: 600;
+  }
+  .sentiment-detail .row .bar {
+    flex: 1;
+    height: 4px;
+    background: var(--paper-2);
+    margin: 0 24px;
+    position: relative;
+  }
+  .sentiment-detail .row .bar .fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+  }
+  .sentiment-detail .row .pct {
+    font-family: var(--serif-en);
+    font-size: 28px;
+    font-weight: 700;
+    min-width: 100px;
+    text-align: right;
+  }
+
+  /* === Page 3: 市场 vs 舆情 === */
+  .market-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 60px;
+  }
+  .sector-perf { }
+  .sector-perf h3, .company-quotes h3 {
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 22px;
+    color: var(--ink-2);
+    margin-bottom: 20px;
+  }
+  .sector-bar {
+    display: grid;
+    grid-template-columns: 80px 1fr 80px;
+    align-items: center;
+    padding: 12px 0;
+    border-bottom: 1px dotted var(--rule);
+  }
+  .sector-bar .name {
+    font-family: var(--serif-cn);
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .sector-bar .track {
+    height: 10px;
+    background: var(--paper-2);
+    position: relative;
+    margin: 0 16px;
+  }
+  .sector-bar .track .center {
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    bottom: -2px;
+    width: 1px;
+    background: var(--ink-3);
+  }
+  .sector-bar .track .bar {
+    position: absolute;
+    top: 0; bottom: 0;
+  }
+  .sector-bar .track .bar.up { background: var(--up); }
+  .sector-bar .track .bar.down { background: var(--down); }
+  .sector-bar .pct {
+    font-family: var(--serif-en);
+    font-size: 18px;
+    font-weight: 600;
+    text-align: right;
+  }
+  .sector-bar .pct.up { color: var(--up); }
+  .sector-bar .pct.down { color: var(--down); }
+
+  .company-quotes table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--serif-en);
+  }
+  .company-quotes th {
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-3);
+    padding: 8px 4px;
+    border-bottom: 2px solid var(--ink);
+  }
+  .company-quotes td {
+    padding: 12px 4px;
+    border-bottom: 1px solid var(--rule);
+    font-size: 15px;
+  }
+  .company-quotes td.name { font-family: var(--serif-cn); font-weight: 600; }
+  .company-quotes td.sector-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .company-quotes td.pct { text-align: right; font-weight: 600; }
+  .company-quotes td.pct.up { color: var(--up); }
+  .company-quotes td.pct.down { color: var(--down); }
+
+  .sector-scatter {
+    margin-top: 60px;
+    padding-top: 40px;
+    border-top: 2px solid var(--ink);
+  }
+  .sector-scatter h3 {
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 22px;
+    color: var(--ink-2);
+    margin-bottom: 24px;
+  }
+  .scatter-svg { width: 100%; height: 360px; }
+
+  /* === Page 4: 时间分布 === */
+  .time-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    margin-bottom: 40px;
+  }
+  .time-stats .cell {
+    padding: 24px 32px;
+    border-right: 1px solid var(--rule);
+  }
+  .time-stats .cell:last-child { border-right: none; }
+  .time-stats .label {
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+  }
+  .time-stats .num {
+    font-family: var(--serif-en);
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  .time-chart {
+    background: var(--paper-2);
+    padding: 32px;
+    border: 1px solid var(--ink);
+  }
+  .time-chart .legend {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-2);
+  }
+  .time-chart .legend span::before {
+    content: '';
+    display: inline-block;
+    width: 10px; height: 10px;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .time-chart .legend .pos::before { background: var(--up); }
+  .time-chart .legend .neg::before { background: var(--down); }
+  .time-chart .legend .count::before { background: var(--ink-3); }
+
+  .time-bars-svg { width: 100%; height: 320px; }
+
+  /* === Page 5: 风险/机会 === */
+  .signals-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px;
+  }
+  .signals-col h3 {
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 24px;
+    color: var(--ink-2);
+    margin-bottom: 4px;
+  }
+  .signals-col.opp h3 { color: var(--up); }
+  .signals-col.risk h3 { color: var(--down); }
+  .signals-col .col-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--ink-3);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 20px;
+  }
+  .signal-card {
+    border-top: 1px solid var(--ink);
+    padding: 20px 0;
+  }
+  .signal-card .word-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 8px;
+  }
+  .signal-card .word {
+    font-family: var(--serif-cn);
+    font-size: 28px;
+    font-weight: 700;
+  }
+  .signal-card .count {
+    font-family: var(--serif-en);
+    font-size: 32px;
+    font-weight: 700;
+  }
+  .signals-col.opp .signal-card .word { color: var(--up); }
+  .signals-col.opp .signal-card .count { color: var(--up); }
+  .signals-col.risk .signal-card .word { color: var(--down); }
+  .signals-col.risk .signal-card .count { color: var(--down); }
+
+  .signal-card .sample {
+    font-family: var(--serif-cn);
+    font-size: 14px;
+    color: var(--ink-2);
+    line-height: 1.6;
+    border-left: 2px solid var(--rule);
+    padding-left: 12px;
+    margin-top: 8px;
+    font-style: italic;
+  }
+  .signal-card .sample .hl-opp { color: var(--up); font-weight: 600; font-style: normal; }
+  .signal-card .sample .hl-risk { color: var(--down); font-weight: 600; font-style: normal; }
+
+  /* === Page 6: AI 总结 === */
+  .insights {
+    columns: 2;
+    column-gap: 60px;
+    column-rule: 1px solid var(--rule);
+    font-family: var(--serif-cn);
+    font-size: 18px;
+    line-height: 1.85;
+    color: var(--ink);
+  }
+  .insights p {
+    margin-bottom: 18px;
+    text-indent: 2em;
+  }
+  .insights p:first-child::first-letter {
+    font-family: var(--serif-en);
+    font-size: 80px;
+    font-weight: 900;
+    color: var(--accent);
+    float: left;
+    line-height: 0.85;
+    margin: 8px 8px 0 0;
+  }
+  .insights .highlight {
+    background: linear-gradient(180deg, transparent 60%, rgba(168, 42, 42, 0.15) 60%);
+    padding: 0 2px;
+  }
+  .sector-focus {
+    margin-top: 48px;
+    border-top: 2px solid var(--ink);
+    padding-top: 32px;
+  }
+  .sector-focus .label {
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.3em;
+    color: var(--ink-3);
+    margin-bottom: 8px;
+  }
+  .sector-focus .val {
+    font-family: var(--serif-cn);
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--accent);
+  }
+  .sector-focus .desc {
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 16px;
+    color: var(--ink-2);
+    margin-top: 8px;
+  }
+
+  /* === Page 7: 结论 === */
+  .conclusion {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .conclusion h2 {
+    font-family: var(--serif-cn);
+    font-size: 72px;
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 32px;
+  }
+  .conclusion h2 .italic {
+    font-family: var(--serif-en);
+    font-style: italic;
+    color: var(--accent);
+  }
+  .conclusion .points {
+    list-style: none;
+    margin: 32px 0;
+  }
+  .conclusion .points li {
+    font-family: var(--serif-cn);
+    font-size: 20px;
+    line-height: 1.7;
+    padding: 16px 0 16px 60px;
+    border-bottom: 1px solid var(--rule);
+    position: relative;
+  }
+  .conclusion .points li::before {
+    content: counter(point);
+    counter-increment: point;
+    position: absolute;
+    left: 0;
+    top: 16px;
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 32px;
+    color: var(--accent);
+  }
+  .conclusion .points { counter-reset: point; }
+  .conclusion .footer-mark {
+    margin-top: 60px;
+    text-align: center;
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 14px;
+    color: var(--ink-3);
+    letter-spacing: 0.1em;
+  }
+  .conclusion .footer-mark::before,
+  .conclusion .footer-mark::after {
+    content: '◆';
+    color: var(--accent);
+    margin: 0 16px;
+  }
+
+  /* === 右侧翻页指示器 === */
+  .slide-indicator {
+    position: fixed;
+    right: 32px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .slide-indicator a {
+    width: 10px; height: 10px;
+    border: 1px solid var(--ink-3);
+    background: transparent;
+    border-radius: 50%;
+    transition: all 0.2s;
+  }
+  .slide-indicator a.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    transform: scale(1.3);
+  }
+  .slide-indicator a:hover {
+    background: var(--ink);
+    border-color: var(--ink);
+  }
+
+  /* === 加载 / 错误状态 === */
+  .loading, .error {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--serif-en);
+    font-style: italic;
+    font-size: 24px;
+    color: var(--ink-3);
+  }
+  .error { color: var(--accent); }
+
+  /* === 翻页按钮 === */
+  .scroll-hint {
+    position: absolute;
+    bottom: 32px;
+    left: 80px;
+    font-family: var(--mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    color: var(--ink-3);
+    animation: hint 2s ease-in-out infinite;
+  }
+  .scroll-hint::after {
+    content: '';
+    display: block;
+    width: 1px;
+    height: 24px;
+    background: var(--ink-3);
+    margin: 8px auto 0;
+  }
+  @keyframes hint {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 1; }
+  }
+
+  /* === 响应式（平板） === */
+  @media (max-width: 880px) {
+    .slide { padding: 48px 40px; }
+    .masthead, .page-num, .scroll-hint { left: 40px; right: 40px; }
+    .cover h1 { font-size: 64px; }
+    .slide-title { font-size: 40px; }
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .kpi-cell { border-bottom: 1px solid var(--rule); }
+    .signals-grid { grid-template-columns: 1fr; }
+    .insights { columns: 1; }
+    .market-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+  <!-- 占位：内容由 JS 注入 -->
+  <div class="loading">载入中…</div>
 </div>
 
-<div id="toast-container" style="position:fixed;top:20px;right:20px;z-index:9999;"></div>
+<nav class="slide-indicator" id="indicator"></nav>
 
-<div class="row">
-    <div class="col-lg-6 mb-4">
-        <div class="card">
-            <div class="card-header">📄 评论数据导出</div>
-            <div class="card-body">
-                <div class="mb-3">
-                    <label class="form-label">按视频筛选（可选）</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="export-video-bvid" placeholder="输入BV号，留空导出全部">
-                        <button class="btn btn-outline-secondary" onclick="loadVideoPreview()">预览</button>
-                    </div>
-                    <div id="video-preview" class="mt-2"></div>
-                </div>
-                <div class="btn-group">
-                    <button class="btn btn-primary" onclick="exportCSV()">
-                        <i class="bi bi-download"></i> 导出CSV
-                    </button>
-                    <button class="btn btn-success" onclick="exportJSON()">
-                        <i class="bi bi-file-earmark-text"></i> 导出JSON报告
-                    </button>
-                    <button class="btn btn-outline-secondary" onclick="exportSummary()">
-                        <i class="bi bi-file-spreadsheet"></i> 导出摘要
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-lg-6 mb-4">
-        <div class="card">
-            <div class="card-header">📊 分析状态总览</div>
-            <div class="card-body">
-                <div id="analysis-status">
-                    <div class="spinner-border spinner-border-sm" role="status"></div> 加载中...
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">📈 最近分析记录</div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm">
-                        <thead><tr><th>分析类型</th><th>关联数据</th><th>分析时间</th></tr></thead>
-                        <tbody id="analysis-records"><tr><td colspan="3" class="text-center text-muted">加载中...</td></tr></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block scripts %}
 <script>
-var API_BASE = '/api/v1';
+  // ============================================================
+  // 工具函数
+  // ============================================================
+  const fmt = n => (n == null ? '—' : Number(n).toLocaleString('zh-CN'));
+  const pct = n => (n == null ? '—' : (n > 0 ? '+' : '') + Number(n).toFixed(1) + '%');
+  const pctClass = n => (n > 0 ? 'up' : n < 0 ? 'down' : '');
+  const esc = s => String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
-function showToast(msg, type) {
-    type = type || 'info';
-    var bg = type === 'success' ? 'bg-success' : type === 'danger' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info';
-    var container = document.getElementById('toast-container');
-    var el = document.createElement('div');
-    el.className = 'toast align-items-center text-white ' + bg + ' border-0 mb-2';
-    el.setAttribute('role', 'alert');
-    el.innerHTML = '<div class="d-flex"><div class="toast-body">' + msg + '</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>';
-    container.appendChild(el);
-    var toast = new bootstrap.Toast(el, { delay: 3000 });
-    toast.show();
-    el.addEventListener('hidden.bs.toast', function() { el.remove(); });
-}
+  // 高亮关键词在样本中
+  function highlightSamples(samples, words, hlClass) {
+    if (!samples || !samples.length) return '';
+    return samples.slice(0, 2).map(s => {
+      let out = esc(s);
+      for (const w of words) {
+        const re = new RegExp(esc(w), 'g');
+        out = out.replace(re, m => `<span class="${hlClass}">${m}</span>`);
+      }
+      return `<div class="sample">"${out}"</div>`;
+    }).join('');
+  }
 
-async function fetchJSON(url, opts) {
-    var resp = await fetch(API_BASE + url, opts || {});
-    if (!resp.ok) {
-        var err = await resp.text();
-        throw new Error(err || ('HTTP ' + resp.status));
+  // ============================================================
+  // 渲染：核心简报
+  // ============================================================
+  function renderKPI(d) {
+    const s = d.sentiment || {};
+    return `
+      <div class="kpi-grid">
+        <div class="kpi-cell">
+          <div class="label">监控视频</div>
+          <div class="num">${fmt(d.total_videos)}<span class="unit">支</span></div>
+          <div class="delta">${d.is_fallback ? '回退到 7 天' : '当日实时'}</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="label">评论总数</div>
+          <div class="num">${fmt(d.total_comments)}<span class="unit">条</span></div>
+          <div class="delta">区间 ${d.range_label || '—'}</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="label">正面占比</div>
+          <div class="num">${(s.positive_ratio || 0).toFixed(1)}<span class="unit">%</span></div>
+          <div class="delta up">偏正面 +${(s.positive_ratio - 50).toFixed(0)}pp</div>
+        </div>
+        <div class="kpi-cell">
+          <div class="label">整体情绪</div>
+          <div class="num" style="color: var(--accent);">${esc(s.mood || '—')}</div>
+          <div class="delta">中性 ${(s.neutral_ratio || 0).toFixed(0)}% · 负面 ${(s.negative_ratio || 0).toFixed(0)}%</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderSentimentDonut(s) {
+    const pos = s.positive_ratio || 0, neu = s.neutral_ratio || 0, neg = s.negative_ratio || 0;
+    const r = 80, cx = 120, cy = 120, sw = 28;
+    // 三段弧形
+    const total = pos + neu + neg;
+    if (total === 0) return '<div class="loading">暂无情绪数据</div>';
+    const segs = [
+      { v: pos, c: 'var(--up)' },
+      { v: neu, c: 'var(--ink-3)' },
+      { v: neg, c: 'var(--down)' },
+    ];
+    let acc = 0;
+    const paths = segs.map(seg => {
+      const startA = (acc / total) * Math.PI * 2;
+      acc += seg.v;
+      const endA = (acc / total) * Math.PI * 2;
+      const x1 = cx + r * Math.cos(startA), y1 = cy + r * Math.sin(startA);
+      const x2 = cx + r * Math.cos(endA),   y2 = cy + r * Math.sin(endA);
+      const large = (endA - startA) > Math.PI ? 1 : 0;
+      return `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}" stroke="${seg.c}" stroke-width="${sw}" fill="none" />`;
+    }).join('');
+    return `
+      <div class="donut-wrap">
+        <svg width="240" height="240" viewBox="0 0 240 240">
+          <circle cx="120" cy="120" r="${r}" stroke="var(--paper-2)" stroke-width="${sw}" fill="none" />
+          ${paths}
+          <text class="donut-center-big" x="120" y="125" text-anchor="middle" transform="rotate(90 120 120)">${s.mood || '—'}</text>
+          <text class="donut-center" x="120" y="155" text-anchor="middle" transform="rotate(90 120 120)">MOOD</text>
+        </svg>
+      </div>
+      <div class="sentiment-detail">
+        <div class="row">
+          <span class="name">正面 <span style="color:var(--up)">▲</span></span>
+          <div class="bar"><div class="fill" style="width:${pos}%; background:var(--up)"></div></div>
+          <span class="pct" style="color:var(--up)">${pos.toFixed(1)}%</span>
+        </div>
+        <div class="row">
+          <span class="name">中性 <span style="color:var(--ink-3)">—</span></span>
+          <div class="bar"><div class="fill" style="width:${neu}%; background:var(--ink-3)"></div></div>
+          <span class="pct">${neu.toFixed(1)}%</span>
+        </div>
+        <div class="row">
+          <span class="name">负面 <span style="color:var(--down)">▼</span></span>
+          <div class="bar"><div class="fill" style="width:${neg}%; background:var(--down)"></div></div>
+          <span class="pct" style="color:var(--down)">${neg.toFixed(1)}%</span>
+        </div>
+      </div>
+    `;
+  }
+
+  // ============================================================
+  // 渲染：市场
+  // ============================================================
+  function renderMarket(mkt) {
+    if (!mkt) return '<div class="loading">暂无行情数据</div>';
+    const sectors = mkt.sector_perf || {};
+    const sectorKeys = Object.keys(sectors);
+    // 找最大正负值用于 bar 缩放
+    const maxAbs = Math.max(3, ...sectorKeys.map(k => Math.abs(sectors[k] || 0)));
+
+    const sectorBars = sectorKeys.map(sec => {
+      const v = sectors[sec] || 0;
+      const halfW = 50; // 百分比
+      const w = (Math.abs(v) / maxAbs) * halfW;
+      const isUp = v > 0;
+      return `
+        <div class="sector-bar">
+          <div class="name">${esc(sec)}</div>
+          <div class="track">
+            <div class="center"></div>
+            <div class="bar ${isUp ? 'up' : 'down'}" style="${isUp ? `left:50%; width:${w}%;` : `right:50%; width:${w}%;`}"></div>
+          </div>
+          <div class="pct ${pctClass(v)}">${pct(v)}</div>
+        </div>
+      `;
+    }).join('');
+
+    const quotes = (mkt.company_quotes || []).map(q => {
+      const v = q.pct_chg;
+      return `
+        <tr>
+          <td class="name">${esc(q.name)}</td>
+          <td class="sector-tag">${esc(q.sector || '')}</td>
+          <td>${fmt(q.close)}</td>
+          <td class="pct ${pctClass(v)}">${pct(v)}</td>
+        </tr>
+      `;
+    }).join('');
+
+    return `
+      <div class="market-grid">
+        <div class="sector-perf">
+          <h3>板块涨跌幅 · ${esc(mkt.market_date || '')}</h3>
+          ${sectorBars || '<div class="loading">暂无板块数据</div>'}
+          <p style="margin-top:24px; font-family: var(--serif-en); font-style: italic; color: var(--ink-3); font-size: 13px;">
+            0% 基线居中，绿色为上涨，红色为下跌。数据源：Mock（接口骨架已就位，待接 Tushare/AKShare）。
+          </p>
+        </div>
+        <div class="company-quotes">
+          <h3>重点公司行情</h3>
+          <table>
+            <thead>
+              <tr><th>公司</th><th>板块</th><th>收盘</th><th>涨跌</th></tr>
+            </thead>
+            <tbody>${quotes || '<tr><td colspan="4">暂无数据</td></tr>'}</tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  // 散点图：舆情差 vs 板块涨跌
+  function renderScatter(sectorCompare) {
+    if (!sectorCompare || !sectorCompare.length) return '<div class="loading">暂无对比数据</div>';
+    const W = 900, H = 320, padL = 60, padR = 40, padT = 30, padB = 50;
+    const minS = -50, maxS = 50;
+    const minM = -3, maxM = 3;
+    const xScale = v => padL + ((v - minS) / (maxS - minS)) * (W - padL - padR);
+    const yScale = v => H - padB - ((v - minM) / (maxM - minM)) * (H - padT - padB);
+
+    // 轴
+    const xAxis = `
+      <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--ink)" stroke-width="1" />
+      ${[-50, -25, 0, 25, 50].map(t => {
+        const x = xScale(t);
+        return `<line x1="${x}" y1="${H - padB}" x2="${x}" y2="${H - padB + 4}" stroke="var(--ink)" />
+                <text x="${x}" y="${H - padB + 18}" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--ink-3)">${t > 0 ? '+' : ''}${t}%</text>`;
+      }).join('')}
+      <text x="${W/2}" y="${H - 10}" text-anchor="middle" font-family="Noto Serif SC" font-size="13" fill="var(--ink-2)">舆情净情绪差 (正-负) %</text>
+    `;
+    const yAxis = `
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="var(--ink)" stroke-width="1" />
+      ${[-3, -1.5, 0, 1.5, 3].map(t => {
+        const y = yScale(t);
+        return `<line x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" stroke="var(--ink)" />
+                <text x="${padL - 8}" y="${y + 4}" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="var(--ink-3)">${t > 0 ? '+' : ''}${t}%</text>`;
+      }).join('')}
+      <text x="20" y="${H/2}" text-anchor="middle" font-family="Noto Serif SC" font-size="13" fill="var(--ink-2)" transform="rotate(-90 20 ${H/2})">板块当日涨跌幅</text>
+    `;
+    // 中心轴（0 线）
+    const zeroX = xScale(0), zeroY = yScale(0);
+    const zeroLines = `
+      <line x1="${zeroX}" y1="${padT}" x2="${zeroX}" y2="${H - padB}" stroke="var(--rule)" stroke-dasharray="2 3" />
+      <line x1="${padL}" y1="${zeroY}" x2="${W - padR}" y2="${zeroY}" stroke="var(--rule)" stroke-dasharray="2 3" />
+    `;
+    // 数据点
+    const points = sectorCompare.filter(s => s.sector_pct_chg != null).map(s => {
+      const x = xScale(Math.max(-50, Math.min(50, s.sentiment_gap)));
+      const y = yScale(Math.max(-3, Math.min(3, s.sector_pct_chg)));
+      const r = Math.max(8, Math.min(28, 8 + Math.sqrt(s.comment_total) * 1.5));
+      return `
+        <g>
+          <circle cx="${x}" cy="${y}" r="${r}" fill="var(--accent)" fill-opacity="0.25" stroke="var(--accent)" stroke-width="1.5" />
+          <text x="${x}" y="${y - r - 6}" text-anchor="middle" font-family="Noto Serif SC" font-size="13" font-weight="600" fill="var(--ink)">${esc(s.sector)}</text>
+          <text x="${x}" y="${y + 4}" text-anchor="middle" font-family="IBM Plex Mono" font-size="11" fill="var(--ink-2)">${s.comment_total}</text>
+        </g>
+      `;
+    }).join('');
+
+    return `
+      <div class="sector-scatter">
+        <h3>舆情 vs 行情 散点图 · 圆点大小 = 评论数</h3>
+        <svg class="scatter-svg" viewBox="0 0 ${W} ${H}">
+          ${yAxis}${xAxis}${zeroLines}${points}
+          <!-- 四象限标签 -->
+          <text x="${W - padR - 8}" y="${padT + 14}" text-anchor="end" font-family="Noto Serif SC" font-size="11" font-style="italic" fill="var(--up)">乐观 + 涨</text>
+          <text x="${padL + 8}" y="${padT + 14}" font-family="Noto Serif SC" font-size="11" font-style="italic" fill="var(--ink-3)">悲观 + 涨</text>
+          <text x="${padL + 8}" y="${H - padB - 8}" font-family="Noto Serif SC" font-size="11" font-style="italic" fill="var(--ink-3)">悲观 + 跌</text>
+          <text x="${W - padR - 8}" y="${H - padB - 8}" text-anchor="end" font-family="Noto Serif SC" font-size="11" font-style="italic" fill="var(--down)">乐观 + 跌（背离）</text>
+        </svg>
+      </div>
+    `;
+  }
+
+  // ============================================================
+  // 渲染：时间分布
+  // ============================================================
+  function renderTimeChart(td) {
+    if (!td || !td.buckets || !td.buckets.length) return '<div class="loading">暂无时间分布数据</div>';
+    const W = 1100, H = 320, padL = 50, padR = 30, padT = 20, padB = 50;
+    const buckets = td.buckets;
+    const maxCount = Math.max(1, ...buckets.map(b => b.count));
+    const bw = (W - padL - padR) / buckets.length;
+    const yScale = v => H - padB - (v / maxCount) * (H - padT - padB);
+
+    // y 轴
+    const yTicks = [0, 0.25, 0.5, 0.75, 1].map(t => Math.round(maxCount * t));
+    const yAxis = `
+      <line x1="${padL}" y1="${padT}" x2="${padL}" y2="${H - padB}" stroke="var(--ink)" />
+      ${yTicks.map(t => {
+        const y = yScale(t);
+        return `<line x1="${padL - 4}" y1="${y}" x2="${padL}" y2="${y}" stroke="var(--ink)" />
+                <text x="${padL - 8}" y="${y + 4}" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="var(--ink-3)">${t}</text>`;
+      }).join('')}
+    `;
+    // x 轴
+    const xLabels = td.granularity === 'hour'
+      ? buckets.map((b, i) => i % 3 === 0 ? b.label : '').filter(x => x)
+      : buckets.map((b, i) => i % Math.max(1, Math.floor(buckets.length / 8)) === 0 ? b.label : '').filter(x => x);
+    const xAxis = `
+      <line x1="${padL}" y1="${H - padB}" x2="${W - padR}" y2="${H - padB}" stroke="var(--ink)" />
+      ${buckets.map((b, i) => {
+        const x = padL + bw * (i + 0.5);
+        const showLabel = td.granularity === 'hour' ? (i % 3 === 0) : (i % Math.max(1, Math.floor(buckets.length / 8)) === 0);
+        return showLabel
+          ? `<text x="${x}" y="${H - padB + 16}" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="var(--ink-3)">${esc(b.label)}</text>`
+          : '';
+      }).join('')}
+    `;
+    // 柱状图 + 情绪比例线
+    const bars = buckets.map((b, i) => {
+      const x = padL + bw * i;
+      const totalH = (b.count / maxCount) * (H - padT - padB);
+      const posH = (b.positive / maxCount) * (H - padT - padB);
+      const negH = (b.negative / maxCount) * (H - padT - padB);
+      const isPeak = b.label === td.peak_bucket;
+      return `
+        <g>
+          <rect x="${x + bw * 0.1}" y="${H - padB - totalH}" width="${bw * 0.8}" height="${totalH}" fill="rgba(22, 17, 13, 0.18)" stroke="${isPeak ? 'var(--accent)' : 'none'}" stroke-width="2" />
+          <rect x="${x + bw * 0.1}" y="${H - padB - posH}" width="${bw * 0.4}" height="${posH}" fill="var(--up)" />
+          <rect x="${x + bw * 0.5}" y="${H - padB - negH}" width="${bw * 0.4}" height="${negH}" fill="var(--down)" />
+        </g>
+      `;
+    }).join('');
+
+    // 折线：positive_pct
+    const linePts = buckets.map((b, i) => {
+      const x = padL + bw * (i + 0.5);
+      const y = yScale(b.count * (b.positive_pct / 100));
+      return `${x},${y}`;
+    }).join(' ');
+
+    return `
+      <div class="time-stats">
+        <div class="cell">
+          <div class="label">总评论数</div>
+          <div class="num">${fmt(td.total)}</div>
+        </div>
+        <div class="cell">
+          <div class="label">粒度</div>
+          <div class="num">${td.granularity === 'hour' ? '按小时' : '按天'}</div>
+        </div>
+        <div class="cell">
+          <div class="label">高峰时段</div>
+          <div class="num">${td.peak_bucket || '—'}</div>
+        </div>
+      </div>
+      <div class="time-chart">
+        <div class="legend">
+          <span class="pos">正面</span>
+          <span class="neg">负面</span>
+          <span class="count">总评论数</span>
+        </div>
+        <svg class="time-bars-svg" viewBox="0 0 ${W} ${H}">
+          ${yAxis}${xAxis}${bars}
+          <polyline points="${linePts}" fill="none" stroke="var(--accent)" stroke-width="2" />
+        </svg>
+      </div>
+    `;
+  }
+
+  // ============================================================
+  // 渲染：风险/机会
+  // ============================================================
+  function renderSignals(sig) {
+    if (!sig) return '<div class="loading">暂无信号数据</div>';
+    const oppWords = (sig.opportunity || []).map(s => s.word);
+    const riskWords = (sig.risk || []).map(s => s.word);
+
+    const oppCards = (sig.opportunity || []).map(s => `
+      <div class="signal-card">
+        <div class="word-row">
+          <div class="word">${esc(s.word)}</div>
+          <div class="count">${fmt(s.count)}</div>
+        </div>
+        ${highlightSamples(s.samples, oppWords, 'hl-opp')}
+      </div>
+    `).join('');
+
+    const riskCards = (sig.risk || []).map(s => `
+      <div class="signal-card">
+        <div class="word-row">
+          <div class="word">${esc(s.word)}</div>
+          <div class="count">${fmt(s.count)}</div>
+        </div>
+        ${highlightSamples(s.samples, riskWords, 'hl-risk')}
+      </div>
+    `).join('');
+
+    return `
+      <div class="signals-grid">
+        <div class="signals-col opp">
+          <h3>Opportunity · 机会信号</h3>
+          <div class="col-meta">共 ${fmt(sig.opportunity_total || 0)} 次命中</div>
+          ${oppCards || '<div class="loading">暂无机会词命中</div>'}
+        </div>
+        <div class="signals-col risk">
+          <h3>Risk · 风险信号</h3>
+          <div class="col-meta">共 ${fmt(sig.risk_total || 0)} 次命中</div>
+          ${riskCards || '<div class="loading">暂无风险词命中</div>'}
+        </div>
+      </div>
+    `;
+  }
+
+  // ============================================================
+  // 渲染：AI 总结
+  // ============================================================
+  function renderInsights(summary) {
+    if (!summary) return '<div class="loading">暂无 AI 总结</div>';
+    // 兼容两种结构：key_insights 可能是 ["string",...] 也可能是 [{side, text, likes},...]
+    const rawInsights = summary.key_insights || [];
+    const insightsHtml = rawInsights.map(item => {
+      if (typeof item === 'string') {
+        return `<p>${esc(item)}</p>`;
+      }
+      // 对象结构：{side, text, likes}
+      const side = item.side || '';
+      const text = item.text || '';
+      const likes = item.likes != null ? item.likes : '';
+      const sideColor = side === '正方' ? 'var(--up)' : side === '反方' ? 'var(--down)' : 'var(--ink-2)';
+      const sideHTML = side
+        ? `<span style="font-family: var(--mono); font-size: 11px; color: ${sideColor}; text-transform: uppercase; letter-spacing: 0.2em; margin-right: 12px;">${esc(side)}</span>`
+        : '';
+      const likesHTML = likes !== ''
+        ? `<span style="font-family: var(--serif-en); font-style: italic; color: var(--ink-3); font-size: 13px; margin-left: 12px;">♥ ${likes}</span>`
+        : '';
+      return `<p>${sideHTML}${esc(text)}${likesHTML}</p>`;
+    }).join('');
+
+    // 兼容 sector_focus：可能是 {name, description} 或 [string, ...] 或 []
+    const focus = summary.sector_focus;
+    let focusName = '—', focusDesc = '';
+    if (focus && typeof focus === 'object' && !Array.isArray(focus)) {
+      focusName = focus.name || '—';
+      focusDesc = focus.description || '';
+    } else if (Array.isArray(focus) && focus.length) {
+      focusName = focus[0].name || focus[0] || '—';
+      focusDesc = focus[0].description || '';
     }
-    return await resp.json();
-}
 
-async function apiPost(url) {
-    return await fetchJSON(url, { method: 'POST' });
-}
+    const hot = (summary.hot_terms || []).slice(0, 8)
+      .map(t => typeof t === 'string' ? t : (t.word || t))
+      .map(t => `<span class="highlight">${esc(t)}</span>`).join(' · ');
 
-function getBvid() {
-    return document.getElementById('export-video-bvid').value.trim();
-}
+    return `
+      <div class="insights">
+        ${insightsHtml || '<p>本期评论数据较少，暂无深度洞察生成。</p>'}
+      </div>
+      <div class="sector-focus">
+        <div class="label">SECTOR FOCUS · 板块聚焦</div>
+        <div class="val">${esc(focusName)}</div>
+        <div class="desc">${esc(focusDesc)}</div>
+        ${hot ? `<div style="margin-top: 24px; font-family: var(--serif-cn); font-size: 16px; color: var(--ink-2);">热议词：${hot}</div>` : ''}
+      </div>
+    `;
+  }
 
-async function loadVideoPreview() {
-    var bvid = getBvid();
-    if (!bvid) { document.getElementById('video-preview').innerHTML = ''; return; }
-    try {
-        var video = await fetchJSON('/videos/' + bvid);
-        document.getElementById('video-preview').innerHTML = '<div class="alert alert-success py-1 mb-0"><strong>' + video.title + '</strong> · 评论' + video.comment_count + ' · 弹幕' + video.danmaku_count + '</div>';
-    } catch(e) {
-        document.getElementById('video-preview').innerHTML = '<div class="alert alert-danger py-1 mb-0">未找到该视频</div>';
+  // ============================================================
+  // 渲染：结论
+  // ============================================================
+  function renderConclusion(d) {
+    // 优先使用 editor_takeaway（真正的编辑视角总结），
+    // 兼容老接口：无则从 key_insights 提取 text，最后兜底 3 句通用建议。
+    const summary = d.summary || {};
+    let points = [];
+    if (Array.isArray(summary.editor_takeaway) && summary.editor_takeaway.length) {
+      points = summary.editor_takeaway.filter(Boolean);
+    } else if (Array.isArray(summary.key_insights)) {
+      points = summary.key_insights
+        .map(p => typeof p === 'string' ? p : (p && p.text || ''))
+        .filter(Boolean);
     }
-}
+    if (!points.length) {
+      points = [
+        '本期监控数据已采集，平台持续跟踪 B 站 AI 投资领域舆情变化。',
+        '建议重点关注报告中的板块聚焦与风险/机会信号词，辅助投资判断。',
+        '行情接口已接入 AKShare 实时数据源，可形成完整闭环。'
+      ];
+    }
+    const li = points.slice(0, 4).map(p => `<li>${esc(p)}</li>`).join('');
+    return `
+      <div class="conclusion">
+        <h2>本期 <span class="italic">观察与</span><br>后续建议</h2>
+        <ol class="points">${li}</ol>
+        <div class="footer-mark">END OF REPORT · v2.2</div>
+      </div>
+    `;
+  }
 
-function exportCSV() {
-    var bvid = getBvid();
-    var url = API_BASE + '/export/report/csv';
-    if (bvid) url += '?video_bvid=' + encodeURIComponent(bvid);
-    showToast('正在导出CSV...', 'info');
-    window.open(url, '_blank');
-}
+  // ============================================================
+  // 渲染：完整报告
+  // ============================================================
+  function renderReport(d) {
+    const today = d.end_date || d.date || new Date().toISOString().slice(0, 10);
+    return `
+      <!-- Page 1: 封面 -->
+      <section class="slide cover">
+        <div class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>VOL. 2 · NO. ${today.replace(/-/g, '').slice(2)}</span>
+          <span class="date">${today}</span>
+        </div>
+        <div class="edition">— A · I · N · V · E · S · T · M · E · N · T —</div>
+        <h1>舆情<span class="accent">观察</span>报告</h1>
+        <div class="subtitle">
+          ${esc(d.summary && d.summary.headline || 'B 站半导体 / 光通信 / 光芯片三大板块舆情每日聚合')}
+        </div>
+        <div class="mood-stamp">整体情绪 · ${esc(d.sentiment && d.sentiment.mood || '—')}</div>
+        <div class="meta-grid">
+          <div class="meta-cell"><div class="label">监控视频</div><div class="val">${fmt(d.total_videos)}</div></div>
+          <div class="meta-cell"><div class="label">评论总数</div><div class="val">${fmt(d.total_comments)}</div></div>
+          <div class="meta-cell"><div class="label">区间</div><div class="val" style="font-size:18px; font-family: var(--serif-cn);">${esc(d.range_label || today)}</div></div>
+        </div>
+        <div class="page-num"><span class="num">01</span> / 07</div>
+        <div class="scroll-hint">SCROLL DOWN</div>
+      </section>
 
-function exportJSON() {
-    var bvid = getBvid();
-    var url = API_BASE + '/export/report/json';
-    if (bvid) url += '?video_bvid=' + encodeURIComponent(bvid);
-    showToast('正在导出JSON报告...', 'info');
-    window.open(url, '_blank');
-}
+      <!-- Page 2: 核心态势 -->
+      <section class="slide">
+        <header class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>KEY METRICS</span>
+          <span class="date">${today}</span>
+        </header>
+        <div class="slide-content">
+          <div class="section-label">02 · KEY METRICS</div>
+          <h2 class="slide-title">
+            <span class="en">The State of Conversation</span>
+            核心态势
+          </h2>
+          <div class="slide-deck">从视频采集量、评论热度、情感分布三个角度，看本期 B 站 AI 投资舆情的整体盘面。</div>
+          <div class="rule-double"></div>
+          ${renderKPI(d)}
+          <div class="sentiment-donut">${renderSentimentDonut(d.sentiment || {})}</div>
+        </div>
+        <div class="page-num"><span class="num">02</span> / 07</div>
+        <div class="scroll-hint">SCROLL DOWN</div>
+      </section>
 
-function exportSummary() {
-    var bvid = getBvid();
-    var url = API_BASE + '/export/report/excel-summary';
-    if (bvid) url += '?video_bvid=' + encodeURIComponent(bvid);
-    showToast('正在导出摘要...', 'info');
-    window.open(url, '_blank');
-}
+      <!-- Page 3: 市场 vs 舆情 -->
+      <section class="slide">
+        <header class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>MARKET vs SENTIMENT</span>
+          <span class="date">${today}</span>
+        </header>
+        <div class="slide-content">
+          <div class="section-label">03 · MARKET CONTEXT</div>
+          <h2 class="slide-title">
+            <span class="en">Sentiment Against the Tape</span>
+            市场行情对比
+          </h2>
+          <div class="slide-deck">当日板块涨跌幅、重点公司行情、舆情 vs 行情散点对照，看乐观与现实之间的距离。</div>
+          <div class="rule-double"></div>
+          ${renderMarket(d.market)}
+          ${renderScatter(d.sector_compare)}
+        </div>
+        <div class="page-num"><span class="num">03</span> / 07</div>
+        <div class="scroll-hint">SCROLL DOWN</div>
+      </section>
 
-async function loadStatus() {
-    var dims = ['sentiment', 'keywords', 'trend', 'user_profile', 'topic_cluster', 'network', 'danmaku_density'];
-    var names = { 'sentiment': '情感分析', 'keywords': '关键词提取', 'trend': '趋势分析', 'user_profile': '用户画像', 'topic_cluster': '话题聚类', 'network': '互动网络', 'danmaku_density': '弹幕密度' };
-    var completed = 0;
-    var html = '';
-    for (var i = 0; i < dims.length; i++) {
-        try {
-            var data = await fetchJSON('/analysis/' + dims[i]);
-            var ok = data.status !== 'no_data';
-            if (ok) completed++;
-            html += '<div class="d-flex justify-content-between mb-2"><span>' + (names[dims[i]] || dims[i]) + '</span><span class="badge ' + (ok ? 'bg-success' : 'bg-secondary') + '">' + (ok ? '已完成' : '未分析') + '</span></div>';
-        } catch(e) {
-            html += '<div class="d-flex justify-content-between mb-2"><span>' + (names[dims[i]] || dims[i]) + '</span><span class="badge bg-danger">查询失败</span></div>';
+      <!-- Page 4: 时间分布 -->
+      <section class="slide">
+        <header class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>TIME DISTRIBUTION</span>
+          <span class="date">${today}</span>
+        </header>
+        <div class="slide-content">
+          <div class="section-label">04 · TEMPORAL FLOW</div>
+          <h2 class="slide-title">
+            <span class="en">When the Crowd Speaks</span>
+            评论时间分布
+          </h2>
+          <div class="slide-deck">${td.granularity === 'hour' ? '按小时聚合' : '按天聚合'}的评论密度与情绪走势，定位议论高峰。</div>
+          <div class="rule-double"></div>
+          ${renderTimeChart(d.time_distribution)}
+        </div>
+        <div class="page-num"><span class="num">04</span> / 07</div>
+        <div class="scroll-hint">SCROLL DOWN</div>
+      </section>
+
+      <!-- Page 5: 风险/机会 -->
+      <section class="slide">
+        <header class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>SIGNALS</span>
+          <span class="date">${today}</span>
+        </header>
+        <div class="slide-content">
+          <div class="section-label">05 · RISK & OPPORTUNITY</div>
+          <h2 class="slide-title">
+            <span class="en">Words That Move Money</span>
+            风险 · 机会信号
+          </h2>
+          <div class="slide-deck">从评论中提取的高频机会词与风险词，附典型样本，看人群的真实倾向。</div>
+          <div class="rule-double"></div>
+          ${renderSignals(d.signals)}
+        </div>
+        <div class="page-num"><span class="num">05</span> / 07</div>
+        <div class="scroll-hint">SCROLL DOWN</div>
+      </section>
+
+      <!-- Page 6: AI 总结 -->
+      <section class="slide">
+        <header class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>EDITORIAL</span>
+          <span class="date">${today}</span>
+        </header>
+        <div class="slide-content">
+          <div class="section-label">06 · EDITORIAL VIEW</div>
+          <h2 class="slide-title">
+            <span class="en">The Editor's Cut</span>
+            AI 多视角总结
+          </h2>
+          <div class="slide-deck">综合板块聚焦、关键洞察、热议词，提炼本期舆情的多视角解读。</div>
+          <div class="rule-double"></div>
+          ${renderInsights(d.summary)}
+        </div>
+        <div class="page-num"><span class="num">06</span> / 07</div>
+        <div class="scroll-hint">SCROLL DOWN</div>
+      </section>
+
+      <!-- Page 7: 结论 -->
+      <section class="slide">
+        <header class="masthead">
+          <span class="brand">Bilibili Sentiment Daily</span>
+          <span>CONCLUSION</span>
+          <span class="date">${today}</span>
+        </header>
+        <div class="slide-content">
+          <div class="section-label">07 · CONCLUSION</div>
+          ${renderConclusion(d)}
+        </div>
+        <div class="page-num"><span class="num">07</span> / 07</div>
+      </section>
+    `;
+  }
+
+  // ============================================================
+  // 翻页指示器
+  // ============================================================
+  function setupIndicator() {
+    const deck = document.getElementById('deck');
+    const slides = deck.querySelectorAll('.slide');
+    const ind = document.getElementById('indicator');
+    ind.innerHTML = '';
+    slides.forEach((s, i) => {
+      const a = document.createElement('a');
+      a.href = '#';
+      a.title = `Page ${i + 1}`;
+      a.addEventListener('click', e => { e.preventDefault(); s.scrollIntoView({ behavior: 'smooth' }); });
+      ind.appendChild(a);
+    });
+
+    // IntersectionObserver 高亮当前页
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          const idx = Array.from(slides).indexOf(e.target);
+          ind.querySelectorAll('a').forEach((a, i) => a.classList.toggle('active', i === idx));
         }
-    }
-    html = '<div class="mb-3"><strong>' + completed + '/' + dims.length + ' 维度已完成</strong></div>' + html;
-    document.getElementById('analysis-status').innerHTML = html;
-}
+      });
+    }, { root: deck, threshold: 0.5 });
+    slides.forEach(s => obs.observe(s));
+  }
 
-async function loadRecords() {
+  // ============================================================
+  // 入口
+  // ============================================================
+  function _fmtDate(d) {
+    var y = d.getFullYear();
+    var m = String(d.getMonth() + 1).padStart(2, '0');
+    var day = String(d.getDate()).padStart(2, '0');
+    return y + '-' + m + '-' + day;
+  }
+
+  async function main() {
+    // 默认周报（最近 7 天）：today-6 ~ today。URL 带参则尊重用户意图。
+    var params = new URLSearchParams(location.search);
+    if (!params.has('start_date') && !params.has('end_date') && !params.has('date')) {
+      var today = new Date();
+      var weekAgo = new Date(today);
+      weekAgo.setDate(today.getDate() - 6);
+      params.set('start_date', _fmtDate(weekAgo));
+      params.set('end_date', _fmtDate(today));
+    }
+    var qs = params.toString();
+    var url = `/api/v1/analysis/report-daily${qs ? '?' + qs : ''}`;
+    let data;
     try {
-        var records = [];
-        var dims = ['sentiment', 'keywords', 'trend', 'user_profile', 'topic_cluster', 'network', 'danmaku_density'];
-        var names = { 'sentiment': '情感分析', 'keywords': '关键词提取', 'trend': '趋势分析', 'user_profile': '用户画像', 'topic_cluster': '话题聚类', 'network': '互动网络', 'danmaku_density': '弹幕密度' };
-        for (var i = 0; i < dims.length; i++) {
-            try {
-                var data = await fetchJSON('/analysis/' + dims[i]);
-                if (data.status !== 'no_data' && data.analyzed_at) {
-                    records.push({ type: names[dims[i]] || dims[i], ref: '--', time: data.analyzed_at });
-                }
-            } catch(e) {}
-        }
-        var html = '';
-        if (records.length === 0) {
-            html = '<tr><td colspan="3" class="text-center text-muted">暂无分析记录，请先触发数据分析</td></tr>';
-        } else {
-            records.sort(function(a,b) { return (b.time||'').localeCompare(a.time||''); });
-            records.forEach(function(r) {
-                html += '<tr><td>' + r.type + '</td><td><code>' + r.ref + '</code></td><td>' + (r.time||'').substring(0,19) + '</td></tr>';
-            });
-        }
-        document.getElementById('analysis-records').innerHTML = html;
-    } catch(e) {
-        document.getElementById('analysis-records').innerHTML = '<tr><td colspan="3" class="text-center text-danger">加载失败</td></tr>';
+      const r = await fetch(url);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      data = await r.json();
+    } catch (e) {
+      document.getElementById('deck').innerHTML = `<div class="error">数据加载失败：${e.message}</div>`;
+      return;
     }
-}
+    document.getElementById('deck').innerHTML = renderReport(data);
+    setupIndicator();
+  }
 
-async function triggerGlobalAnalysis() {
-    try {
-        await apiPost('/monitor/keywords/1/trigger-analysis');
-        showToast('全量分析任务已提交', 'success');
-        setTimeout(function() { loadStatus(); loadRecords(); }, 3000);
-    } catch(e) {
-        showToast('触发失败: ' + e.message, 'danger');
-    }
-}
-
-async function triggerGovernance() {
-    try {
-        await apiPost('/governance/trigger');
-        showToast('治理流水线已触发', 'success');
-    } catch(e) {
-        showToast('触发失败: ' + e.message, 'danger');
-    }
-}
-
-document.addEventListener('DOMContentLoaded', function() {
-    loadStatus();
-    loadRecords();
-});
+  // 关闭 ESLint no-undef 警告
+  const td = { granularity: 'day' };
+  main();
 </script>
-{% endblock %}
+
+</body>
+</html>

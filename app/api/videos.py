@@ -20,6 +20,7 @@ def list_videos(
     partition: str | None = Query(None, description="按分区筛选"),
     sort_by: str = Query("created_at", description="排序字段: created_at/view_count/comment_count"),
     sort_order: str = Query("desc", description="排序方向: asc/desc"),
+    date_range: str = Query("all", description="时间范围: all/today/week/month"),
     db: Session = Depends(get_db),
 ):
     query = db.query(Video)
@@ -27,6 +28,15 @@ def list_videos(
         query = query.filter(Video.title.contains(keyword))
     if partition:
         query = query.filter(Video.partition_tag == partition)
+
+    from datetime import datetime, timedelta
+    now = datetime.now()
+    if date_range == "today":
+        query = query.filter(Video.created_at >= now.replace(hour=0, minute=0, second=0, microsecond=0))
+    elif date_range == "week":
+        query = query.filter(Video.created_at >= now - timedelta(days=7))
+    elif date_range == "month":
+        query = query.filter(Video.created_at >= now - timedelta(days=30))
 
     order_col = getattr(Video, sort_by, Video.created_at)
     if sort_order == "desc":
@@ -110,12 +120,16 @@ def trigger_comments_crawl(bvid: str):
 
 @router.post(
     "/{bvid}/trigger-danmaku",
-    summary="手动触发Protobuf弹幕采集",
+    summary="[v2 已废弃] 弹幕采集已下线",
+    deprecated=True,
 )
 def trigger_danmaku_crawl(bvid: str):
-    from app.tasks.crawl import crawl_danmaku_proto
-    task = crawl_danmaku_proto.delay(bvid)
-    return {"status": "queued", "bvid": bvid, "task_id": task.id}
+    """v2: 不再抓取弹幕。保留路由以兼容旧客户端，但返回说明。"""
+    return {
+        "status": "deprecated",
+        "bvid": bvid,
+        "message": "v2 已停止抓取弹幕，本接口为占位。",
+    }
 
 
 @router.post(

@@ -18,6 +18,7 @@ class Comment(Base):
     has_image: Mapped[bool] = mapped_column(Boolean, default=False)
     image_urls: Mapped[str | None] = mapped_column(JSON)
     pub_time: Mapped[str | None] = mapped_column(DateTime)
+    parent_rpid: Mapped[int] = mapped_column(BigInteger, default=0, index=True)
     created_at: Mapped[str] = mapped_column(
         DateTime, server_default=func.now()
     )

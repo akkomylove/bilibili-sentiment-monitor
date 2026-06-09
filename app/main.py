@@ -15,9 +15,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="B站舆情监控与分析平台",
-    description="覆盖数据采集、治理、分析、API服务、可视化展示的舆情监控系统",
-    version="1.0.0",
+    title="B 站 AI 投资领域舆情聚合工具",
+    description="v2 简化为单页每日简报：半导体 / 光通信 / 光芯片 三个板块的舆情、情绪、热词与板块聚焦。",
+    version="2.1.0",
     lifespan=lifespan,
 )
 
@@ -37,4 +37,4 @@ app.include_router(api_router)
 
 @app.get("/", tags=["系统"])
 def root():
-    return RedirectResponse(url="/dashboard")
+    return RedirectResponse(url="/daily-brief")

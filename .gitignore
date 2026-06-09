@@ -8,6 +8,37 @@ venv/
 dist/
 build/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 *.log
 instance/
 .DS_Store
+
+# Runtime / temp files
+celerybeat-schedule*
+__trace.py
+__v.py
+*.db
+*.sqlite3
+
+# Project runtime artifacts
+logs/
+data/
+.trae/
+
+# Process / error capture
+*.err
+*.out
+*.pid
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+desktop.ini

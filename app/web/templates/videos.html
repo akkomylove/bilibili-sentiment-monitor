@@ -31,6 +31,14 @@
             <option value="100">每页100条</option>
         </select>
     </div>
+    <div class="col-md-2">
+        <select class="form-select" id="date-range-select" onchange="loadVideos(1)">
+            <option value="all">全部时间</option>
+            <option value="today">今日</option>
+            <option value="week">近7天</option>
+            <option value="month">近30天</option>
+        </select>
+    </div>
 </div>
 
 <div class="card">
@@ -91,11 +99,12 @@ async function loadVideos(page) {
     currentPage = page;
     var keyword = document.getElementById('search-keyword').value;
     var pageSize = document.getElementById('page-size-select').value;
+    var dateRange = document.getElementById('date-range-select').value;
     var sortVal = document.getElementById('sort-select').value;
     var sortParts = sortVal.split('|');
     var sortBy = sortParts[0];
     var sortOrder = sortParts[1];
-    var url = '/videos/?page=' + page + '&page_size=' + pageSize + '&sort_by=' + sortBy + '&sort_order=' + sortOrder;
+    var url = '/videos/?page=' + page + '&page_size=' + pageSize + '&sort_by=' + sortBy + '&sort_order=' + sortOrder + '&date_range=' + dateRange;
     if (keyword) url += '&keyword=' + encodeURIComponent(keyword);
 
     try {
@@ -145,14 +154,16 @@ async function triggerCrawl(bvid) {
 }
 
 async function triggerGlobalCrawl() {
-    showToast('正在触发全量采集...', 'info');
+    showToast('正在触发限速采集（每关键词最多 20 视频 / 3 页）...', 'info');
     try {
         var keywords = await fetchJSON('/monitor/keywords?page=1&page_size=100');
         var count = 0;
         for (var i = 0; i < keywords.items.length; i++) {
-            try { await apiPost('/monitor/keywords/' + keywords.items[i].id + '/trigger'); count++; } catch(e) {}
+            if (keywords.items[i].is_active) {
+                try { await apiPost('/monitor/keywords/' + keywords.items[i].id + '/trigger'); count++; } catch(e) {}
+            }
         }
-        showToast('已触发 ' + count + ' 个关键词的采集任务', 'success');
+        showToast('已触发 ' + count + ' 个关键词的限速采集任务（每词上限 20 视频）', 'success');
     } catch(e) {
         showToast('操作失败: ' + e.message, 'danger');
     }

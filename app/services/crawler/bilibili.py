@@ -81,6 +81,7 @@ class CommentInfo:
     has_image: bool
     image_urls: list[str]
     pub_time: str
+    parent_rpid: int = 0
 
 
 @dataclass
@@ -294,6 +295,7 @@ class BilibiliAPI:
             has_image=len(image_urls) > 0,
             image_urls=image_urls,
             pub_time=datetime_from_timestamp(reply.get("ctime", 0)),
+            parent_rpid=reply.get("parent", 0) or 0,
         )
 
     def get_comments(self, oid: str, page: int = 1, page_size: int = 20, sort: int = 1) -> list[CommentInfo]:
@@ -314,6 +316,7 @@ class BilibiliAPI:
             return results
 
         for reply in replies:
+            top_rpid = reply.get("rpid", 0)
             comment = self._parse_reply(reply)
             if comment:
                 results.append(comment)
@@ -324,6 +327,8 @@ class BilibiliAPI:
                     folded_comment = self._parse_reply(folded)
                     if folded_comment:
                         folded_comment.content = f"[回复] {folded_comment.content}"
+                        if not folded_comment.parent_rpid:
+                            folded_comment.parent_rpid = top_rpid
                         results.append(folded_comment)
 
         return results
